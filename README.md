@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/romanSPB15/acell.svg)](https://pkg.go.dev/github.com/romanSPB15/acell)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage](https://img.shields.io/badge/coverage-95%25-yellow)](./calc-coverage-noterm.ps1)
+[![Coverage](https://img.shields.io/badge/coverage-95%25-green)](./calc-coverage-noterm.ps1)
 [![Test](https://github.com/romanSPB15/acell/actions/workflows/test.yaml/badge.svg)](https://github.com/romanSPB15/acell/actions/workflows/test.yaml)
 
 **Низкоуровневый терминальный слой для Go.**
@@ -14,8 +14,6 @@
 - 🎁 Windows без WSL, без CGO
 - 📦 Всего две зависимости — `x/sys` и `x/term`
 - ✅ 95% покрытие ядра тестами
-
-Терминальный слой [tui-compose v4](https://github.com/romanSPB15/tui-compose).
 
 <h3 align="center"><pre>go get -u github.com/romanSPB15/acell</pre></h3>
 
