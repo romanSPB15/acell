@@ -149,12 +149,12 @@ func (t *Terminal) Events() <-chan any {
 // Close останавливает терминал и восстанавливает режим.
 func (t *Terminal) Close() error {
 	t.closeOnce.Do(func() {
+		t.closeErr = t.raw.Close()
 		t.raw.Write(end)
 		if err := t.raw.Restore(); err != nil {
 			t.closeErr = err
 			return
 		}
-		t.closeErr = t.raw.Close()
 	})
 	return t.closeErr
 }

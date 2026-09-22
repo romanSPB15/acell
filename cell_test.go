@@ -401,7 +401,7 @@ func TestParseMultiline(t *testing.T) {
 
 func FuzzParseANSI(f *testing.F) {
 	f.Add("\x1b[38;2;1;2;3m")
-	f.Add("\x1b[38;2;1;2m") // паникует сейчас
+	f.Add("\x1b[38;2;1;2m")
 	f.Add("\x1b[48;2;255;0m")
 	f.Fuzz(func(t *testing.T, s string) {
 		var buf []Cell
