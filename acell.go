@@ -11,7 +11,7 @@ import (
 
 var (
 	start = []byte("\033[?25l\033[?1003h\033[?1006h\033[?1049h\033[0m\033[H")
-	end   = []byte("\033[0m\033[?25h\033[?1003l\033[?1049l")
+	end   = []byte("\033[0m\033[?25h\033[?1003l\033[?1006l\033[?1049l")
 )
 
 type pos struct {
@@ -149,12 +149,12 @@ func (t *Terminal) Events() <-chan any {
 // Close останавливает терминал и восстанавливает режим.
 func (t *Terminal) Close() error {
 	t.closeOnce.Do(func() {
-		t.closeErr = t.raw.Close()
 		t.raw.Write(end)
 		if err := t.raw.Restore(); err != nil {
 			t.closeErr = err
 			return
 		}
+		t.closeErr = t.raw.Close()
 	})
 	return t.closeErr
 }

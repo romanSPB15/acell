@@ -40,7 +40,7 @@ func TestClose(t *testing.T) {
 		t.Fatal("terminal is raw")
 	}
 
-	expected := append(start, end...)
+	expected := slices.Concat(start, end)
 	if !slices.Equal(tr.WrittenBytes(), expected) {
 		t.Fatalf("invalid bytes written: expected: %v, but got: %v", expected, tr.WrittenBytes())
 	}
