@@ -1,3 +1,6 @@
 coverage.txt
 *.exe
 coverage.html
+*.log
+gif.ps1
+*.mp4

@@ -225,7 +225,6 @@ func main() {
 				if e.Key == acell.KeyCtrlC || e.Rune == 'q' || e.Key == acell.KeyEsc {
 					return
 				}
-			case *acell.MouseEvent:
 			}
 		case <-ticker.C:
 			phase += 0.2

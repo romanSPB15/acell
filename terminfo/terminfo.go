@@ -120,22 +120,20 @@ func Detect() Info {
 		info.Colors = ColorTrue
 	}
 
+	// VS Code Terminal
+	if termProgram == "vscode" {
+		info.Name = "vscode"
+		info.CursorHide = ""
+		info.CursorShow = ""
+		info.Blink = false
+		return info
+	}
+
 	// Windows Terminal
 	if wtSession != "" {
 		info.Name = "windows-terminal"
 		info.Colors = ColorTrue
 		info.SynchronizedUpdate = true
-		info.Blink = false
-		return info
-	}
-
-	// VS Code Terminal
-	if termProgram == "vscode" {
-		info.Name = "vscode"
-		info.Colors = ColorTrue
-		info.CursorHide = ""
-		info.CursorShow = ""
-		info.SynchronizedUpdate = false
 		info.Blink = false
 		return info
 	}
@@ -151,8 +149,6 @@ func Detect() Info {
 		info.Blink = false
 		info.MouseAny = false
 		info.MouseSGR = false
-		info.AltScreenOn = ""
-		info.AltScreenOff = ""
 		info.CursorHide = ""
 		info.CursorShow = ""
 

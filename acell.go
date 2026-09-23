@@ -27,6 +27,9 @@ type Terminal struct {
 	cursorPos pos
 	last      Style
 
+	fgCache map[string]string
+	bgCache map[string]string
+
 	bb builder.Builder
 
 	closeOnce sync.Once
@@ -73,6 +76,8 @@ func NewWithTerm(t term.RawTerminal) *Terminal {
 		raw:       t,
 		Buf:       NewBuf(w, h),
 		cursorPos: pos{-1, -1},
+		fgCache:   make(map[string]string, 32),
+		bgCache:   make(map[string]string, 32),
 	}
 }
 
@@ -93,7 +98,36 @@ func (t *Terminal) maskStyle(s Style) Style {
 	if !t.info.Hidden {
 		s.Args &^= Hidden
 	}
+
+	if t.info.Colors < terminfo.ColorTrue {
+		s.Fg = t.convertFg(s.Fg)
+		s.Bg = t.convertBg(s.Bg)
+	}
 	return s
+}
+
+func (t *Terminal) convertFg(s string) string {
+	if s == "" {
+		return s
+	}
+	if v, ok := t.fgCache[s]; ok {
+		return v
+	}
+	v := convertColor(s, t.info.Colors, false)
+	t.fgCache[s] = v
+	return v
+}
+
+func (t *Terminal) convertBg(s string) string {
+	if s == "" {
+		return s
+	}
+	if v, ok := t.bgCache[s]; ok {
+		return v
+	}
+	v := convertColor(s, t.info.Colors, true)
+	t.bgCache[s] = v
+	return v
 }
 
 // NewBuf создаёт пустой буфер заданного размера.
@@ -152,6 +186,51 @@ func (t *Terminal) Flush() {
 				bb.WriteInt(x + 1)
 				bb.WriteByte('H')
 			}
+
+			// if t.cursorPos.Line != y || t.cursorPos.Col != x {
+			// 	moved := false
+
+			// 	if t.cursorPos.Line == y {
+			// 		dx := x - t.cursorPos.Col
+			// 		if dx > 0 && dx <= 4 {
+			// 			if dx == 1 {
+			// 				bb.WriteString("\033[C")
+			// 			} else {
+			// 				bb.WriteString("\033[")
+			// 				bb.WriteInt(dx)
+			// 				bb.WriteByte('C')
+			// 			}
+			// 			moved = true
+			// 		}
+			// 	}
+
+			// 	if !moved && x == 0 && y == 0 {
+			// 		bb.WriteString("\033[H")
+			// 		moved = true
+			// 	}
+
+			// 	if t.cursorPos.Col == x && t.cursorPos.Line < y {
+			// 		dy := y - t.cursorPos.Line
+			// 		if dy <= 4 {
+			// 			if dy == 1 {
+			// 				bb.WriteString("\033[B")
+			// 			} else {
+			// 				bb.WriteString("\033[")
+			// 				bb.WriteInt(dy)
+			// 				bb.WriteByte('B')
+			// 			}
+			// 			moved = true
+			// 		}
+			// 	}
+
+			// 	if !moved {
+			// 		bb.WriteString("\033[")
+			// 		bb.WriteInt(y + 1)
+			// 		bb.WriteByte(';')
+			// 		bb.WriteInt(x + 1)
+			// 		bb.WriteByte('H')
+			// 	}
+			// }
 
 			st := t.maskStyle(row[x].Style)
 			st.WriteANSI(t.last, bb)
