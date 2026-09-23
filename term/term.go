@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/romanSPB15/acell/terminfo"
 	"golang.org/x/term"
 )
 
@@ -24,6 +25,8 @@ type RawTerminal interface {
 	Close() error
 	Size() (int, int)
 	StartInput()
+
+	Info() terminfo.Info
 }
 
 var (

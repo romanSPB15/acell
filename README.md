@@ -2,18 +2,18 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/romanSPB15/acell.svg)](https://pkg.go.dev/github.com/romanSPB15/acell)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage](https://img.shields.io/badge/coverage-95%25-green)](./calc-coverage-noterm.ps1)
+[![Coverage](https://img.shields.io/badge/coverage-96%25-green)](./calc-coverage-noterm.ps1)
 [![Test](https://github.com/romanSPB15/acell/actions/workflows/test.yaml/badge.svg)](https://github.com/romanSPB15/acell/actions/workflows/test.yaml)
 
 **Низкоуровневый терминальный слой для Go.**
 
-- 🚀 **~5100 FPS** на стресс-бенчмарке — в 2 раза быстрее tcell v3
+- 🚀 **~5100 FPS** на бенчмарке — в 2 раза быстрее tcell v3
 - 🎨 Рисование напрямую в `[][]Cell` — без ANSI-строк на горячем пути
 - 🎯 Полная поддержка мыши: клик, отпускание, движение, скролл (SGR 1006)
-- ⌨ Полная поддержка клавиатуры: стрелки, F1–F12, Ctrl/Alt, Shift+Tab
+- ⌨ Полная поддержка клавиатуры: стрелки, F1–F12, Ctrl/Alt/Shift, Shift+Tab
 - 🎁 Windows без WSL, без CGO
 - 📦 Всего две зависимости — `x/sys` и `x/term`
-- ✅ 95% покрытие ядра тестами
+- ✅ 96% покрытие ядра тестами
 
 <h3 align="center"><pre>go get -u github.com/romanSPB15/acell</pre></h3>
 
@@ -83,7 +83,7 @@ func main() {
 ## Производительность
 
 Стресс-бенчмарк — терминал 120×30, виджет 80×24, 300 изменяющихся клеток
-на кадр, Windows 10 x64, Windows Terminal:
+на кадр, Windows 10 x64, Windows Terminal, с I/O:
 
 | Реализация                            | Raw     | С виджетами         |
 |---------------------------------------|---------|---------------------|
@@ -104,8 +104,8 @@ func main() {
 
 ## Покрытие тестами
 
-- Ядро: **95.3%**
-- С учётом терминального слоя: 61.7%
+- Ядро: **96.2%**
+- С учётом терминального слоя: 58.9%
 
 ```
 ./calc-coverage.ps1          # полное покрытие, включая term

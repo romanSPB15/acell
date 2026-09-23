@@ -28,8 +28,12 @@ const (
 	Reverse
 	// Blink включает мигание.
 	Blink
-	// Reset сбрасывает все атрибуты.
-	Reset
+	// Dim включает приглушённый текст.
+	Dim
+	// Hidden скрывает текст.
+	Hidden
+	// Strike включает зачёркивание.
+	Strike
 
 	resetFg
 	resetBg
@@ -58,12 +62,7 @@ func (c Style) WriteANSI(last Style, bb *builder.Builder) {
 		return
 	}
 
-	if (c == Style{}) {
-		bb.WriteString("\x1b[0m")
-		return
-	}
-
-	if c.Args&Reset != 0 {
+	if c == (Style{}) && last != (Style{}) {
 		bb.WriteString("\x1b[0m")
 		return
 	}
@@ -80,10 +79,21 @@ func (c Style) WriteANSI(last Style, bb *builder.Builder) {
 		needSep = true
 	}
 
-	if c.Args&Bold != 0 && last.Args&Bold == 0 {
-		writeCode("1")
-	} else if c.Args&Bold == 0 && last.Args&Bold != 0 {
-		writeCode("22")
+	boldWas, boldIs := last.Args&Bold != 0, c.Args&Bold != 0
+	dimWas, dimIs := last.Args&Dim != 0, c.Args&Dim != 0
+
+	if boldWas != boldIs || dimWas != dimIs {
+		wrote22 := false
+		if (boldWas && !boldIs) || (dimWas && !dimIs) {
+			writeCode("22")
+			wrote22 = true
+		}
+		if boldIs && (!boldWas || wrote22) {
+			writeCode("1")
+		}
+		if dimIs && (!dimWas || wrote22) {
+			writeCode("2")
+		}
 	}
 
 	if c.Args&Italic != 0 && last.Args&Italic == 0 {
@@ -108,6 +118,18 @@ func (c Style) WriteANSI(last Style, bb *builder.Builder) {
 		writeCode("5")
 	} else if c.Args&Blink == 0 && last.Args&Blink != 0 {
 		writeCode("25")
+	}
+
+	if c.Args&Hidden != 0 && last.Args&Hidden == 0 {
+		writeCode("8")
+	} else if c.Args&Hidden == 0 && last.Args&Hidden != 0 {
+		writeCode("28")
+	}
+
+	if c.Args&Strike != 0 && last.Args&Strike == 0 {
+		writeCode("9")
+	} else if c.Args&Strike == 0 && last.Args&Strike != 0 {
+		writeCode("29")
 	}
 
 	if c.Fg != last.Fg {
@@ -138,10 +160,6 @@ func (c Style) WriteANSI(last Style, bb *builder.Builder) {
 // Merge сливает текущий стиль с переданным, и возвращает объединённый.
 // Старый стиль изменяется.
 func (c Style) Merge(new Style) Style {
-	if new.Args&Reset != 0 {
-		return Style{}
-	}
-
 	c.Args |= new.Args
 
 	if new.Fg != "" {
@@ -175,6 +193,8 @@ func parseANSI(seq string) (Style, uint16) {
 			clearMask |= resetAll
 		case 1:
 			s.Args |= Bold
+		case 2:
+			s.Args |= Dim
 		case 3:
 			s.Args |= Italic
 		case 4:
@@ -183,8 +203,12 @@ func parseANSI(seq string) (Style, uint16) {
 			s.Args |= Blink
 		case 7:
 			s.Args |= Reverse
+		case 8:
+			s.Args |= Hidden
+		case 9:
+			s.Args |= Strike
 		case 22:
-			clearMask |= Bold
+			clearMask |= Bold | Dim
 		case 23:
 			clearMask |= Italic
 		case 24:
@@ -193,6 +217,10 @@ func parseANSI(seq string) (Style, uint16) {
 			clearMask |= Blink
 		case 27:
 			clearMask |= Reverse
+		case 28:
+			clearMask |= Hidden
+		case 29:
+			clearMask |= Strike
 		case 30, 31, 32, 33, 34, 35, 36, 37:
 			s.Fg = fmt.Sprintf("%d", v)
 		case 90, 91, 92, 93, 94, 95, 96, 97:

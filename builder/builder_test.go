@@ -20,6 +20,9 @@ func TestBuilder_WriteString(t *testing.T) {
 	if got := b.String(); got != "hello" {
 		t.Errorf("String() = %q, want %q", got, "hello")
 	}
+	if got := b.StringCopy(); got != "hello" {
+		t.Errorf("StringCopy() = %q, want %q", got, "hello")
+	}
 }
 
 func TestBuilder_WriteByte(t *testing.T) {
@@ -100,6 +103,11 @@ func TestBuilder_Grow(t *testing.T) {
 		t.Errorf("cap after Grow(100) = %d, want at least 100", cap(b.buf))
 	}
 
+	b.Grow(50)
+	if cap(b.buf) < 300 {
+		t.Errorf("cap after Grow(300) and Grow(50) = %d, want at least 300", cap(b.buf))
+	}
+
 	// Проверяем, что после Grow можно писать
 	b.WriteString("test")
 	if got := b.String(); got != "test" {
@@ -145,7 +153,7 @@ func TestBuilder_WriteFormat(t *testing.T) {
 		{"float64", "%f", []any{1.23}, "1.230"},
 		{"bool", "%v %v", []any{true, false}, "true false"},
 		{"percent", "%%", []any{}, "%"},
-		{"mixed", "%s %d %f", []any{"test", 42, 3.14}, "test 42 3.140"},
+		{"mixed", "%s %d %f", []any{"test", uint(42), 3.14}, "test 42 3.140"},
 		{"missing arg", "%s %d", []any{"only"}, "only %!MISSING"},
 		{"unsupported", "%v", []any{struct{ A int }{42}}, "%!UNSUPPORTED"},
 	}
@@ -176,6 +184,16 @@ func TestBuilder_New(t *testing.T) {
 	}
 	if b.Cap() < 0 {
 		t.Errorf("Cap after New = %d, want %d", b.Cap(), 10)
+	}
+}
+
+func TestBuilder_WriteUint(t *testing.T) {
+	b := Builder{}
+	b.WriteUint(123456)
+
+	expected := "123456"
+	if b.String() != expected {
+		t.Errorf("String after WriteUint = '%s', want '%s'", b.String(), expected)
 	}
 }
 

@@ -74,10 +74,13 @@ func TestParse(t *testing.T) {
 		},
 		{
 			Input: "\033[2mH\033[38;2;200;100;50m\033[48;2;120;255;80mi",
-			Expected: cells("Hi", Style{}, Style{
-				Fg: "38;2;200;100;50",
-				Bg: "48;2;120;255;80",
-			}),
+			Expected: cells("Hi",
+				Style{Args: Dim},
+				Style{
+					Fg:   "38;2;200;100;50",
+					Bg:   "48;2;120;255;80",
+					Args: Dim,
+				}),
 		},
 		{
 			Input: "\033[101;5;4;7m\033[95mH\033[39mi",
@@ -103,6 +106,52 @@ func TestParse(t *testing.T) {
 		{
 			Input:    "\033[41m1\033[49m23",
 			Expected: cells("123", Style{Bg: "41"}, Style{}),
+		},
+		{
+			Input: "\033[2mDim\033[22mNormal",
+			Expected: append(
+				cells("Dim", Style{Args: Dim}),
+				cells("Normal", Style{})...,
+			),
+		},
+		{
+			Input: "\033[1;2mBoth\033[22mNone",
+			Expected: append(
+				cells("Both", Style{Args: Bold | Dim}),
+				cells("None", Style{})...,
+			),
+		},
+		{
+			Input: "\033[1;2mBoth\033[22;1mBold",
+			Expected: append(
+				cells("Both", Style{Args: Bold | Dim}),
+				cells("Bold", Style{Args: Bold})...,
+			),
+		},
+		{
+			Input: "\033[8mHidden\033[28mNormal",
+			Expected: append(
+				cells("Hidden", Style{Args: Hidden}),
+				cells("Normal", Style{})...,
+			),
+		},
+		{
+			Input: "\033[9mStrike\033[29mNormal",
+			Expected: append(
+				cells("Strike", Style{Args: Strike}),
+				cells("Normal", Style{})...,
+			),
+		},
+		{
+			Input: "\033[1;2;3;4;5;7;8;9mAll\033[22;23;24;25;27;28;29mNone",
+			Expected: append(
+				cells("All", Style{Args: Bold | Dim | Italic | Underline | Blink | Reverse | Hidden | Strike}),
+				cells("None", Style{})...,
+			),
+		},
+		{
+			Input:    "\033[1mB\033[2mD\033[22mN",
+			Expected: cells("BDN", Style{Args: Bold}, Style{Args: Bold | Dim}, Style{}),
 		},
 	}
 	buf := make([]Cell, 0, 256)
@@ -230,18 +279,6 @@ func TestStyleANSI(t *testing.T) {
 			expected: "\x1b[23m",
 		},
 		{
-			name:     "explicit reset",
-			last:     Style{Fg: "31", Args: Bold},
-			new:      Style{Args: Reset},
-			expected: "\x1b[0m",
-		},
-		{
-			name:     "from empty to reset -> reset",
-			last:     Style{},
-			new:      Style{Args: Reset},
-			expected: "\x1b[0m",
-		},
-		{
 			name:     "multiple changes: fg and bold to empty",
 			last:     Style{Fg: "31", Args: Bold | Underline},
 			new:      Style{},
@@ -277,40 +314,119 @@ func TestStyleANSI(t *testing.T) {
 			new:      Style{Fg: "90"},
 			expected: "",
 		},
-
 		{
 			name:     "reverse - set",
 			last:     Style{Fg: "31", Args: Reverse},
 			new:      Style{Fg: "31"},
 			expected: "\033[27m",
 		},
-
 		{
 			name:     "reverse - reset",
 			last:     Style{},
 			new:      Style{Args: Reverse},
 			expected: "\033[7m",
 		},
-
 		{
-			name:     "reverse - set",
+			name:     "blink - set",
 			last:     Style{Fg: "31", Args: Blink},
 			new:      Style{Fg: "31"},
 			expected: "\033[25m",
 		},
-
 		{
 			name:     "blink - reset",
 			last:     Style{},
 			new:      Style{Args: Blink},
 			expected: "\033[5m",
 		},
-
 		{
 			name:     "italic off, bold on",
 			last:     Style{Args: Italic},
 			new:      Style{Args: Bold},
 			expected: "\033[1;23m",
+		},
+		{
+			name:     "dim on",
+			last:     Style{},
+			new:      Style{Args: Dim},
+			expected: "\x1b[2m",
+		},
+		{
+			name:     "dim off",
+			last:     Style{Fg: "31", Args: Dim},
+			new:      Style{Fg: "31"},
+			expected: "\x1b[22m",
+		},
+		{
+			name:     "bold to dim",
+			last:     Style{Args: Bold},
+			new:      Style{Args: Dim},
+			expected: "\x1b[22;2m",
+		},
+		{
+			name:     "dim to bold",
+			last:     Style{Args: Dim},
+			new:      Style{Args: Bold},
+			expected: "\x1b[22;1m",
+		},
+		{
+			name:     "bold+dim to bold",
+			last:     Style{Args: Bold | Dim},
+			new:      Style{Args: Bold},
+			expected: "\x1b[22;1m",
+		},
+		{
+			name:     "bold+dim to dim",
+			last:     Style{Args: Bold | Dim},
+			new:      Style{Args: Dim},
+			expected: "\x1b[22;2m",
+		},
+		{
+			name:     "bold+dim to nothing",
+			last:     Style{Args: Bold | Dim, Fg: "31"},
+			new:      Style{Fg: "31"},
+			expected: "\x1b[22m",
+		},
+		{
+			name:     "bold on, dim stays",
+			last:     Style{Args: Dim},
+			new:      Style{Args: Bold | Dim},
+			expected: "\x1b[1m",
+		},
+		{
+			name:     "hidden on",
+			last:     Style{},
+			new:      Style{Args: Hidden},
+			expected: "\x1b[8m",
+		},
+		{
+			name:     "hidden off",
+			last:     Style{Fg: "31", Args: Hidden},
+			new:      Style{Fg: "31"},
+			expected: "\x1b[28m",
+		},
+		{
+			name:     "strike on",
+			last:     Style{},
+			new:      Style{Args: Strike},
+			expected: "\x1b[9m",
+		},
+		{
+			name:     "strike off",
+			last:     Style{Fg: "31", Args: Strike},
+			new:      Style{Fg: "31"},
+			expected: "\x1b[29m",
+		},
+		{
+			name:     "all attributes on",
+			last:     Style{},
+			new:      Style{Args: Bold | Dim | Italic | Underline | Reverse | Blink | Hidden | Strike},
+			expected: "\x1b[1;2;3;4;7;5;8;9m",
+		},
+		{
+			name:     "all attributes off",
+			last:     Style{Args: Bold | Dim | Italic | Underline | Reverse | Blink | Hidden | Strike, Fg: "31"},
+			new:      Style{Fg: "31"},
+			expected: "\x1b[22;23;24;27;25;28;29m",
 		},
 	}
 

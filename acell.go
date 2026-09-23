@@ -3,15 +3,12 @@ package acell
 import (
 	"io"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/romanSPB15/acell/builder"
 	"github.com/romanSPB15/acell/term"
-)
-
-var (
-	start = []byte("\033[?1049h\033[?1003h\033[?1006h\033[0m\033[H\033[?25l")
-	end   = []byte("\033[0m\033[?25h\033[?1003l\033[?1006l\033[?1049l")
+	"github.com/romanSPB15/acell/terminfo"
 )
 
 type pos struct {
@@ -21,7 +18,9 @@ type pos struct {
 
 // Terminal управляет буфером, diff-рендером и терминалом.
 type Terminal struct {
-	raw    term.RawTerminal
+	raw  term.RawTerminal
+	info terminfo.Info
+
 	oldBuf [][]Cell
 	Buf    [][]Cell
 
@@ -34,29 +33,70 @@ type Terminal struct {
 	closeErr  error
 }
 
+// Default возвращает стандартные потоки ввода-вывода.
 func Default() (io.Reader, io.Writer) {
 	return os.Stdin, os.Stdout
 }
 
-// New создаёт Terminal и переводит терминал в raw-режим, а также включает ENABLE_VIRTUAL_TERMINAL_PROCESSING для поддержки ANSI на Windows.
+// New создаёт Terminal и переводит терминал в raw-режим,
+// а также включает ENABLE_VIRTUAL_TERMINAL_PROCESSING для ANSI на Windows.
 func New(in io.Reader, out io.Writer) *Terminal {
 	return NewWithTerm(term.NewRawTerminal(in, out))
 }
 
+// NewWithTerm создаёт Terminal на основе переданного RawTerminal.
+// Возможности терминала берутся из t.Info().
 func NewWithTerm(t term.RawTerminal) *Terminal {
+	info := t.Info()
+
 	t.MakeRaw()
 	t.EnableANSI()
+
+	var start []byte
+	start = append(start, info.AltScreenOn...)
+	if info.MouseAny {
+		start = append(start, "\033[?1003h"...)
+	}
+	if info.MouseSGR {
+		start = append(start, "\033[?1006h"...)
+	}
+	start = append(start, info.Sgr0...)
+	start = append(start, info.Home...)
+	start = append(start, info.CursorHide...)
+
 	t.Write(start)
 	t.StartInput()
 
 	w, h := t.Size()
 	return &Terminal{
+		info:      info,
 		raw:       t,
 		Buf:       NewBuf(w, h),
 		cursorPos: pos{-1, -1},
 	}
 }
 
+// maskStyle снимает атрибуты, которые терминал не поддерживает.
+func (t *Terminal) maskStyle(s Style) Style {
+	if !t.info.Blink {
+		s.Args &^= Blink
+	}
+	if !t.info.Dim {
+		s.Args &^= Dim
+	}
+	if !t.info.Italic {
+		s.Args &^= Italic
+	}
+	if !t.info.Strike {
+		s.Args &^= Strike
+	}
+	if !t.info.Hidden {
+		s.Args &^= Hidden
+	}
+	return s
+}
+
+// NewBuf создаёт пустой буфер заданного размера.
 func NewBuf(w, h int) [][]Cell {
 	buf := make([][]Cell, h)
 	for y := range buf {
@@ -88,7 +128,10 @@ func (t *Terminal) Flush() {
 
 	bb := &t.bb
 	bb.Reset()
-	bb.WriteString("\033[?2026h")
+
+	if t.info.SynchronizedUpdate {
+		bb.WriteString("\033[?2026h")
+	}
 
 	changed := false
 
@@ -110,8 +153,9 @@ func (t *Terminal) Flush() {
 				bb.WriteByte('H')
 			}
 
-			row[x].Style.WriteANSI(t.last, bb)
-			t.last = row[x].Style
+			st := t.maskStyle(row[x].Style)
+			st.WriteANSI(t.last, bb)
+			t.last = st
 
 			ch := row[x].Char
 			if ch == 0 {
@@ -131,12 +175,14 @@ func (t *Terminal) Flush() {
 	}
 
 	if changed {
-		bb.WriteString("\033[?2026l")
-
+		if t.info.SynchronizedUpdate {
+			bb.WriteString("\033[?2026l")
+		}
 		t.bb.Copy(t.raw)
 	}
 }
 
+// Size возвращает размер терминала.
 func (t *Terminal) Size() (int, int) {
 	return t.raw.Size()
 }
@@ -146,10 +192,27 @@ func (t *Terminal) Events() <-chan any {
 	return t.raw.Events()
 }
 
+// Info получает информацию об терминале из переменных среды.
+func (t *Terminal) Info() terminfo.Info {
+	return t.raw.Info()
+}
+
 // Close останавливает терминал и восстанавливает режим.
 func (t *Terminal) Close() error {
 	t.closeOnce.Do(func() {
+		var end []byte
+		if t.info.MouseAny {
+			end = append(end, "\033[?1003l"...)
+		}
+		if t.info.MouseSGR {
+			end = append(end, "\033[?1006l"...)
+		}
+		end = append(end, t.info.Sgr0...)
+		end = append(end, t.info.CursorShow...)
+		end = append(end, t.info.AltScreenOff...)
+
 		t.raw.Write(end)
+
 		if err := t.raw.Restore(); err != nil {
 			t.closeErr = err
 			return
@@ -157,4 +220,43 @@ func (t *Terminal) Close() error {
 		t.closeErr = t.raw.Close()
 	})
 	return t.closeErr
+}
+
+// DrawString рисует строку str начиная с позиции (x, y) с заданным стилем.
+// Возвращает количество нарисованных ячеек.
+// Символы, вышедшие за границы буфера, отбрасываются.
+// Поддерживает переносы в строке — \n или \r\n.
+func (t *Terminal) DrawString(x, y int, style Style, str string) {
+	h := len(t.Buf)
+	if h == 0 {
+		return
+	}
+	if y < 0 || y >= h {
+		return
+	}
+	w := len(t.Buf[y])
+	if w == 0 {
+		return
+	}
+
+	if strings.Contains(str, "\n") {
+		strs := strings.Split(strings.ReplaceAll(str, "\r\n", "\n"), "\n")
+		for i, v := range strs {
+			t.DrawString(x, y+i, style, v)
+		}
+		return
+	}
+
+	for _, r := range str {
+		if x >= w {
+			break
+		}
+		if x >= 0 {
+			if r == 0 {
+				r = ' '
+			}
+			t.Buf[y][x] = Cell{Char: r, Style: style}
+		}
+		x++
+	}
 }

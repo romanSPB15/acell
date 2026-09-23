@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"sync"
+
+	"github.com/romanSPB15/acell/terminfo"
 )
 
 var _ RawTerminal = (*fakeRawTerminal)(nil)
@@ -22,6 +24,8 @@ type fakeRawTerminal struct {
 
 	width, height int
 
+	info terminfo.Info
+
 	makeRawErr    error
 	restoreErr    error
 	enableANSIErr error
@@ -33,6 +37,30 @@ func newFakeRawTerminal() *fakeRawTerminal {
 		events: make(chan any, 64),
 		width:  80,
 		height: 24,
+		info: terminfo.Info{
+			Name:   "fake",
+			Colors: 24,
+
+			CursorHide:   "\033[?25l",
+			CursorShow:   "\033[?12l\033[?25h",
+			AltScreenOn:  "\033[?1049h",
+			AltScreenOff: "\033[?1049l",
+			Home:         "\033[H",
+
+			Bold:      true,
+			Dim:       true,
+			Italic:    true,
+			Underline: true,
+			Reverse:   true,
+			Blink:     true,
+			Hidden:    true,
+			Strike:    true,
+
+			MouseAny: true,
+			MouseSGR: true,
+
+			SynchronizedUpdate: true,
+		},
 	}
 }
 
@@ -197,4 +225,16 @@ func (f *fakeRawTerminal) SetCloseErr(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closeErr = err
+}
+
+func (f *fakeRawTerminal) Info() terminfo.Info {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.info
+}
+
+func (f *fakeRawTerminal) SetInfo(info terminfo.Info) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.info = info
 }

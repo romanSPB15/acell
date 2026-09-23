@@ -8,6 +8,7 @@ type (
 	KeyboardEvent = term.KeyboardEvent
 	MouseEvent    = term.MouseEvent
 	MouseAction   = term.MouseAction
+	ResizeEvent   = term.ResizeEvent
 	Point         = term.Point
 	RawTerminal   = term.RawTerminal
 )

@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/romanSPB15/acell/terminfo"
 	"golang.org/x/term"
 )
 
@@ -33,6 +34,12 @@ type rawTerminal struct {
 
 	oldState *term.State
 	oldFile  *os.File
+
+	info terminfo.Info
+}
+
+func (t *rawTerminal) Info() terminfo.Info {
+	return t.info
 }
 
 // NewRawTerminal оборачивает in/out в RawTerminal.
@@ -55,6 +62,7 @@ func NewRawTerminal(in io.Reader, out io.Writer) RawTerminal {
 		out:    out,
 		events: make(chan any, 64),
 		stopCh: make(chan struct{}),
+		info:   terminfo.Detect(),
 	}
 	if f, ok := in.(*os.File); ok {
 		rt.inFile = f

@@ -10,9 +10,6 @@ func main() {
 	in, out := acell.Default()
 	term := acell.New(in, out)
 
-	w, h := term.Size()
-	term.Buf = newBuf(w, h)
-
 	draw(term.Buf, time.Now())
 	term.Flush()
 
@@ -39,18 +36,6 @@ func main() {
 			term.Flush()
 		}
 	}
-}
-
-// newBuf создаёт пустой буфер заданного размера.
-func newBuf(w, h int) [][]acell.Cell {
-	buf := make([][]acell.Cell, h)
-	for y := range buf {
-		buf[y] = make([]acell.Cell, w)
-		for x := range buf[y] {
-			buf[y][x] = acell.Cell{Char: ' '}
-		}
-	}
-	return buf
 }
 
 // draw рисует рамку и текущее время.
@@ -105,7 +90,6 @@ func draw(buf [][]acell.Cell, now time.Time) {
 	}
 }
 
-// drawAt ставит символ в указанную позицию, если она внутри буфера.
 func drawAt(buf [][]acell.Cell, x, y int, ch rune) {
 	if y < 0 || y >= len(buf) {
 		return
