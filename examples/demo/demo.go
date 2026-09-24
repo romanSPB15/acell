@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"time"
+	"unicode/utf8"
 
 	"github.com/romanSPB15/acell"
 	"github.com/romanSPB15/acell/builder"
@@ -204,7 +205,7 @@ func main() {
 
 		label := "Fast TUI engine by romanSPB15"
 		labelY := offY + boxH - 1
-		labelX := (w - len(label)) / 2
+		labelX := (w - utf8.RuneCountInString(label)) / 2
 		for i, r := range label {
 			put(labelX+i-offX, labelY-offY, r, acell.Style{Args: acell.Bold})
 		}
