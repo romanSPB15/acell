@@ -2,21 +2,32 @@ package acell
 
 import "github.com/romanSPB15/acell/term"
 
-// Реэкспорт типов из term для удобства пользователей acell.
+// Типы событий и клавиатуры.
 type (
-	Key           = term.Key
+	// Key — код клавиши (стрелки, F1–F12, Ctrl+буква и т.д.).
+	Key = term.Key
+
+	// KeyboardEvent — событие нажатия клавиши.
 	KeyboardEvent = term.KeyboardEvent
-	MouseEvent    = term.MouseEvent
-	MouseAction   = term.MouseAction
-	ResizeEvent   = term.ResizeEvent
-	Point         = term.Point
-	RawTerminal   = term.RawTerminal
+
+	// MouseEvent — событие мыши: клик, движение, скролл.
+	MouseEvent = term.MouseEvent
+
+	// MouseAction — тип действия мыши (нажатие, отпускание, скролл).
+	MouseAction = term.MouseAction
+
+	// ResizeEvent — событие изменения размера окна терминала.
+	ResizeEvent = term.ResizeEvent
+
+	// Point — координаты (X, Y) в системе ячеек терминала.
+	Point = term.Point
+
+	// RawTerminal — низкоуровневый интерфейс терминала.
+	RawTerminal = term.RawTerminal
 )
 
-// Реэкспорт клавиш.
+// Функциональные клавиши F1–F12.
 const (
-	KeyUnknown Key = term.KeyUnknown
-
 	KeyF1  = term.KeyF1
 	KeyF2  = term.KeyF2
 	KeyF3  = term.KeyF3
@@ -29,7 +40,13 @@ const (
 	KeyF10 = term.KeyF10
 	KeyF11 = term.KeyF11
 	KeyF12 = term.KeyF12
+)
 
+// KeyUnknown — неизвестная клавиша.
+const KeyUnknown Key = term.KeyUnknown
+
+// Управляющие комбинации Ctrl+A … Ctrl+Z.
+const (
 	KeyCtrlA = term.KeyCtrlA
 	KeyCtrlB = term.KeyCtrlB
 	KeyCtrlC = term.KeyCtrlC
@@ -56,7 +73,10 @@ const (
 	KeyCtrlX = term.KeyCtrlX
 	KeyCtrlY = term.KeyCtrlY
 	KeyCtrlZ = term.KeyCtrlZ
+)
 
+// Клавиши редактирования и навигации.
+const (
 	KeyEnter        = term.KeyEnter
 	KeySpace        = term.KeySpace
 	KeyPgUp         = term.KeyPgUp
@@ -65,6 +85,7 @@ const (
 	KeyReverseSlash = term.KeyReverseSlash
 	KeyTab          = term.KeyTab
 	KeyShiftTab     = term.KeyShiftTab
+	KeyEsc          = term.KeyEsc
 
 	KeyBackspace = term.KeyBackspace
 	KeyDelete    = term.KeyDelete
@@ -76,11 +97,9 @@ const (
 	KeyArrowRight = term.KeyArrowRight
 	KeyArrowDown  = term.KeyArrowDown
 	KeyArrowLeft  = term.KeyArrowLeft
-
-	KeyEsc = term.KeyEsc
 )
 
-// Реэкспорт действий мыши и константы "нет кнопки".
+// Действия мыши.
 const (
 	MousePress      = term.MousePress
 	MouseRelease    = term.MouseRelease
@@ -90,5 +109,6 @@ const (
 	MouseWheelLeft  = term.MouseWheelLeft
 	MouseWheelRight = term.MouseWheelRight
 
+	// NoButton — отсутствие нажатой кнопки мыши.
 	NoButton = term.NoButton
 )
