@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/romanSPB15/acell/builder"
 	"github.com/romanSPB15/acell/term"
@@ -173,64 +174,69 @@ func (t *Terminal) Flush() {
 		row := t.Buf[y]
 		oldRow := t.oldBuf[y]
 		for x := range w {
+			if x > 0 && RuneWidth(row[x-1].Char) == 2 {
+				oldRow[x] = row[x]
+				continue
+			}
+
 			if row[x] == oldRow[x] {
 				continue
 			}
 
 			changed = true
 
-			if t.cursorPos.Line != y || t.cursorPos.Col != x {
-				bb.WriteString("\033[")
-				bb.WriteInt(y + 1)
-				bb.WriteByte(';')
-				bb.WriteInt(x + 1)
-				bb.WriteByte('H')
-			}
-
 			// if t.cursorPos.Line != y || t.cursorPos.Col != x {
-			// 	moved := false
-
-			// 	if t.cursorPos.Line == y {
-			// 		dx := x - t.cursorPos.Col
-			// 		if dx > 0 && dx <= 4 {
-			// 			if dx == 1 {
-			// 				bb.WriteString("\033[C")
-			// 			} else {
-			// 				bb.WriteString("\033[")
-			// 				bb.WriteInt(dx)
-			// 				bb.WriteByte('C')
-			// 			}
-			// 			moved = true
-			// 		}
-			// 	}
-
-			// 	if !moved && x == 0 && y == 0 {
-			// 		bb.WriteString("\033[H")
-			// 		moved = true
-			// 	}
-
-			// 	if t.cursorPos.Col == x && t.cursorPos.Line < y {
-			// 		dy := y - t.cursorPos.Line
-			// 		if dy <= 4 {
-			// 			if dy == 1 {
-			// 				bb.WriteString("\033[B")
-			// 			} else {
-			// 				bb.WriteString("\033[")
-			// 				bb.WriteInt(dy)
-			// 				bb.WriteByte('B')
-			// 			}
-			// 			moved = true
-			// 		}
-			// 	}
-
-			// 	if !moved {
-			// 		bb.WriteString("\033[")
-			// 		bb.WriteInt(y + 1)
-			// 		bb.WriteByte(';')
-			// 		bb.WriteInt(x + 1)
-			// 		bb.WriteByte('H')
-			// 	}
+			// 	bb.WriteString("\033[")
+			// 	bb.WriteInt(y + 1)
+			// 	bb.WriteByte(';')
+			// 	bb.WriteInt(x + 1)
+			// 	bb.WriteByte('H')
 			// }
+
+			if t.cursorPos.Line != y || t.cursorPos.Col != x {
+				moved := false
+
+				if t.cursorPos.Line == y {
+					dx := x - t.cursorPos.Col
+					if dx > 0 && dx <= 4 {
+						if dx == 1 {
+							bb.WriteString("\033[C")
+						} else {
+							bb.WriteString("\033[")
+							bb.WriteInt(dx)
+							bb.WriteByte('C')
+						}
+						moved = true
+					}
+				}
+
+				if !moved && x == 0 && y == 0 {
+					bb.WriteString("\033[H")
+					moved = true
+				}
+
+				if t.cursorPos.Col == x && t.cursorPos.Line < y {
+					dy := y - t.cursorPos.Line
+					if dy <= 4 {
+						if dy == 1 {
+							bb.WriteString("\033[B")
+						} else {
+							bb.WriteString("\033[")
+							bb.WriteInt(dy)
+							bb.WriteByte('B')
+						}
+						moved = true
+					}
+				}
+
+				if !moved {
+					bb.WriteString("\033[")
+					bb.WriteInt(y + 1)
+					bb.WriteByte(';')
+					bb.WriteInt(x + 1)
+					bb.WriteByte('H')
+				}
+			}
 
 			st := t.maskStyle(row[x].Style)
 			st.WriteANSI(t.last, bb)
@@ -244,8 +250,10 @@ func (t *Terminal) Flush() {
 
 			oldRow[x] = row[x]
 
-			x2, y2 := x+1, y
-			if x2 == w {
+			rw := RuneWidth(ch)
+			x2 := x + rw
+			y2 := y
+			if x2 >= w {
 				x2 = 0
 				y2++
 			}
@@ -273,7 +281,7 @@ func (t *Terminal) Events() <-chan any {
 
 // Info получает информацию об терминале из переменных среды.
 func (t *Terminal) Info() terminfo.Info {
-	return t.raw.Info()
+	return t.info
 }
 
 // Close останавливает терминал и восстанавливает режим.
@@ -301,41 +309,159 @@ func (t *Terminal) Close() error {
 	return t.closeErr
 }
 
-// DrawString рисует строку str начиная с позиции (x, y) с заданным стилем.
-// Возвращает количество нарисованных ячеек.
-// Символы, вышедшие за границы буфера, отбрасываются.
-// Поддерживает переносы в строке — \n или \r\n.
-func (t *Terminal) DrawString(x, y int, style Style, str string) {
-	h := len(t.Buf)
-	if h == 0 {
-		return
+// DrawRune рисует одну руну в позиции (x, y) с заданным стилем.
+// Возвращает ширину руны (0, 1 или 2) и признак того, что руна нарисована.
+// Ширина 0 означает невидимую руну (комбинирующую) — писать её не нужно.
+// drawn == false означает, что руна не влезла.
+func (t *Terminal) DrawRune(x, y int, style Style, r rune) (width int, drawn bool) {
+	rw := RuneWidth(r)
+	if rw == 0 {
+		return 0, false
 	}
+
+	h := len(t.Buf)
 	if y < 0 || y >= h {
-		return
+		return rw, false
 	}
 	w := len(t.Buf[y])
 	if w == 0 {
-		return
+		return rw, false
+	}
+	if x < 0 || x+rw > w {
+		return rw, false
 	}
 
-	if strings.Contains(str, "\n") {
-		strs := strings.Split(strings.ReplaceAll(str, "\r\n", "\n"), "\n")
-		for i, v := range strs {
-			t.DrawString(x, y+i, style, v)
+	if r == 0 {
+		r = ' '
+	}
+	t.Buf[y][x] = Cell{Char: r, Style: style}
+	for i := 1; i < rw; i++ {
+		t.Buf[y][x+i] = Cell{Char: ' ', Style: style}
+	}
+	return rw, true
+}
+
+// DrawString рисует строку str начиная с позиции (x, y) с заданным стилем с учётом ширины рун.
+// Возвращает количество нарисованных ячеек.
+// Символы, вышедшие за границы буфера, отбрасываются.
+// Поддерживает переносы в строке — \n или \r\n.
+func (t *Terminal) DrawString(x, y int, style Style, str string) int {
+	if strings.ContainsAny(str, "\r\n") {
+		str = strings.ReplaceAll(str, "\r\n", "\n")
+		str = strings.ReplaceAll(str, "\r", "\n")
+		lines := strings.Split(str, "\n")
+		total := 0
+		for i, line := range lines {
+			total += t.DrawString(x, y+i, style, line)
 		}
-		return
+		return total
 	}
 
+	total := 0
 	for _, r := range str {
-		if x >= w {
-			break
+		rw, drawn := t.DrawRune(x, y, style, r)
+		if rw == 0 {
+			continue // невидимая
 		}
-		if x >= 0 {
-			if r == 0 {
-				r = ' '
-			}
-			t.Buf[y][x] = Cell{Char: r, Style: style}
+		if !drawn {
+			break // не влезла — дальше тем более
 		}
-		x++
+		x += rw
+		total += rw
 	}
+	return total
+}
+
+// DrawStringIgnoreWidth рисует строку без учёта ширины рун:
+// одна руна = одна ячейка. Полезно для ASCII-графики, где ширина
+// гарантированно равна 1, или когда нужно нарисовать «как есть».
+// func (t *Terminal) DrawStringIgnoreWidth(x, y int, style Style, str string) int {
+// 	if strings.ContainsAny(str, "\r\n") {
+// 		str = strings.ReplaceAll(str, "\r\n", "\n")
+// 		str = strings.ReplaceAll(str, "\r", "\n")
+// 		lines := strings.Split(str, "\n")
+// 		total := 0
+// 		for i, line := range lines {
+// 			total += t.DrawStringIgnoreWidth(x, y+i, style, line)
+// 		}
+// 		return total
+// 	}
+
+// 	h := len(t.Buf)
+// 	if y < 0 || y >= h {
+// 		return 0
+// 	}
+// 	w := len(t.Buf[y])
+// 	if w == 0 {
+// 		return 0
+// 	}
+
+// 	total := 0
+// 	cx := x
+// 	for _, r := range str {
+// 		if cx >= w {
+// 			break
+// 		}
+// 		if cx >= 0 {
+// 			if r == 0 {
+// 				r = ' '
+// 			}
+// 			t.Buf[y][cx] = Cell{Char: r, Style: style}
+// 			total++
+// 		}
+// 		cx++
+// 	}
+// 	return total
+// }
+
+// RuneWidth возвращает ширину руны в ячейках терминала:
+// 0 — невидимая (комбинирующие, zero-width, управляющие),
+// 1 — обычная,
+// 2 — широкая (CJK, Hangul, Kana, emoji, fullwidth).
+func RuneWidth(r rune) int {
+	if r == 0 {
+		return 0
+	}
+	// Управляющие и DEL — невидимы
+	if r < 0x20 || r == 0x7F {
+		return 0
+	}
+	// Комбинирующие и zero-width — 0
+	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
+		return 0
+	}
+	if r >= 0x200B && r <= 0x200F {
+		return 0
+	}
+	if r >= 0xFE00 && r <= 0xFE0F {
+		return 0
+	}
+	if r >= 0xFE20 && r <= 0xFE2F {
+		return 0
+	}
+
+	// Широкие — 2
+	switch {
+	case r >= 0x1100 && r <= 0x115F: // Hangul Jamo
+	case r >= 0x2E80 && r <= 0x303E: // CJK Radicals, Kangxi
+	case r >= 0x3041 && r <= 0x33FF: // Hiragana, Katakana, Bopomofo, CJK
+	case r >= 0x3400 && r <= 0x4DBF: // CJK Ext A
+	case r >= 0x4E00 && r <= 0x9FFF: // CJK Unified
+	case r >= 0xA000 && r <= 0xA4CF: // Yi
+	case r >= 0xAC00 && r <= 0xD7A3: // Hangul Syllables
+	case r >= 0xF900 && r <= 0xFAFF: // CJK Compatibility Ideographs
+	case r >= 0xFE10 && r <= 0xFE19: // Vertical Forms
+	case r >= 0xFE30 && r <= 0xFE6F: // CJK Compatibility Forms
+	case r >= 0xFF00 && r <= 0xFF60: // Fullwidth Forms
+	case r >= 0xFFE0 && r <= 0xFFE6: // Fullwidth Signs
+	case r >= 0x1F300 && r <= 0x1F64F: // Emoji, Misc Symbols
+	case r >= 0x1F680 && r <= 0x1F6FF: // Transport and Map
+	case r >= 0x1F900 && r <= 0x1F9FF: // Supplemental Symbols
+	case r >= 0x1FA00 && r <= 0x1FAFF: // Symbols and Pictographs Ext
+	case r >= 0x20000 && r <= 0x2FFFD: // CJK Ext B+
+	case r >= 0x30000 && r <= 0x3FFFD: // CJK Ext G+
+	default:
+		return 1
+	}
+	return 2
 }
