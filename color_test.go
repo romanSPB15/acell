@@ -28,8 +28,8 @@ func TestNearest256(t *testing.T) {
 	if got := nearest256(255, 255, 255); got != 231 {
 		t.Errorf("nearest256 white = %d, want 231", got)
 	}
-	if got := nearest256(0, 0, 0); got != 0 {
-		t.Errorf("nearest256 black = %d, want 0", got)
+	if got := nearest256(0, 0, 0); got != 16 {
+		t.Errorf("nearest256 black = %d, want 16", got)
 	}
 }
 

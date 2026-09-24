@@ -54,8 +54,24 @@ func nearest(r, g, b uint8, palette [][3]uint8) int {
 }
 
 func nearest256(r, g, b uint8) int {
-	best, bestD := 0, 1<<30
-	for i := 0; i < 256; i++ {
+	best, bestD := 16, 1<<30
+
+	// Сначала кубик 6×6×6 + серые (16–255)
+	for i := 16; i < 256; i++ {
+		c := ansi256RGB[i]
+		dr := int(c[0]) - int(r)
+		dg := int(c[1]) - int(g)
+		db := int(c[2]) - int(b)
+		d := dr*dr + dg*dg + db*db
+		if d < bestD {
+			best, bestD = i, d
+			if d == 0 {
+				return i
+			}
+		}
+	}
+
+	for i := 0; i < 16; i++ {
 		c := ansi256RGB[i]
 		dr := int(c[0]) - int(r)
 		dg := int(c[1]) - int(g)
@@ -65,6 +81,7 @@ func nearest256(r, g, b uint8) int {
 			best, bestD = i, d
 		}
 	}
+
 	return best
 }
 
@@ -83,9 +100,12 @@ func parseColorCode(s string, isBg bool) parsedColor {
 		if len(parts) != 5 {
 			return parsedColor{}
 		}
-		rv, _ := strconv.Atoi(parts[2])
-		gv, _ := strconv.Atoi(parts[3])
-		bv, _ := strconv.Atoi(parts[4])
+		rv, err1 := strconv.Atoi(parts[2])
+		gv, err2 := strconv.Atoi(parts[3])
+		bv, err3 := strconv.Atoi(parts[4])
+		if err1 != nil || err2 != nil || err3 != nil {
+			return parsedColor{}
+		}
 		return parsedColor{kind: 3, r: uint8(rv), g: uint8(gv), b: uint8(bv)}
 	}
 	if strings.HasPrefix(s, "38;5;") || strings.HasPrefix(s, "48;5;") {
@@ -93,7 +113,10 @@ func parseColorCode(s string, isBg bool) parsedColor {
 		if len(parts) != 3 {
 			return parsedColor{}
 		}
-		n, _ := strconv.Atoi(parts[2])
+		n, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return parsedColor{}
+		}
 		return parsedColor{kind: 2, idx: n}
 	}
 	n, err := strconv.Atoi(s)
