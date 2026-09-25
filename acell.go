@@ -268,8 +268,10 @@ func (t *Terminal) Flush() {
 			if x2 >= w {
 				x2 = 0
 				y2++
+				t.cursorPos = pos{-1, -1}
+			} else {
+				t.cursorPos = pos{Line: y2, Col: x2}
 			}
-			t.cursorPos = pos{Line: y2, Col: x2}
 
 			prevCharOriginal = currentCharOriginal
 		}
