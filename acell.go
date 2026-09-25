@@ -170,16 +170,28 @@ func (t *Terminal) Flush() {
 
 	changed := false
 
+	var prevCharOriginal rune
+
 	for y := range h {
 		row := t.Buf[y]
 		oldRow := t.oldBuf[y]
 		for x := range w {
-			if x > 0 && RuneWidth(row[x-1].Char) == 2 {
-				oldRow[x] = row[x]
+			if row[x] == oldRow[x] {
 				continue
 			}
 
-			if row[x] == oldRow[x] {
+			currentCharOriginal := oldRow[x].Char
+
+			if x > 0 && RuneWidth(row[x-1].Char) == 2 {
+				oldRow[x] = row[x]
+				prevCharOriginal = currentCharOriginal
+				continue
+			}
+
+			forceWrite := x > 0 && RuneWidth(prevCharOriginal) == 2
+
+			if !forceWrite && row[x] == oldRow[x] {
+				prevCharOriginal = currentCharOriginal
 				continue
 			}
 
@@ -258,6 +270,8 @@ func (t *Terminal) Flush() {
 				y2++
 			}
 			t.cursorPos = pos{Line: y2, Col: x2}
+
+			prevCharOriginal = currentCharOriginal
 		}
 	}
 
@@ -443,8 +457,10 @@ func RuneWidth(r rune) int {
 	// Широкие — 2
 	switch {
 	case r >= 0x1100 && r <= 0x115F: // Hangul Jamo
+	case r >= 0x2600 && r <= 0x27BF: // Misc symbols, Dingbats
+	case r >= 0x2B00 && r <= 0x2BFF: // Misc symbols and arrows
 	case r >= 0x2E80 && r <= 0x303E: // CJK Radicals, Kangxi
-	case r >= 0x3041 && r <= 0x33FF: // Hiragana, Katakana, Bopomofo, CJK
+	case r >= 0x3041 && r <= 0x33FF: // Hiragana, Katakana
 	case r >= 0x3400 && r <= 0x4DBF: // CJK Ext A
 	case r >= 0x4E00 && r <= 0x9FFF: // CJK Unified
 	case r >= 0xA000 && r <= 0xA4CF: // Yi
@@ -454,12 +470,20 @@ func RuneWidth(r rune) int {
 	case r >= 0xFE30 && r <= 0xFE6F: // CJK Compatibility Forms
 	case r >= 0xFF00 && r <= 0xFF60: // Fullwidth Forms
 	case r >= 0xFFE0 && r <= 0xFFE6: // Fullwidth Signs
+	case r >= 0x1F000 && r <= 0x1F02F: // Mahjong
+	case r >= 0x1F0A0 && r <= 0x1F0FF: // Playing cards
+	case r >= 0x1F100 && r <= 0x1F1FF: // Enclosed alphanumerics
+	case r >= 0x1F200 && r <= 0x1F2FF: // Enclosed ideographic
 	case r >= 0x1F300 && r <= 0x1F64F: // Emoji, Misc Symbols
 	case r >= 0x1F680 && r <= 0x1F6FF: // Transport and Map
+	case r >= 0x1F700 && r <= 0x1F77F: // Alchemical
+	case r >= 0x1F780 && r <= 0x1F7FF: // Geometric Shapes Extended
+	case r >= 0x1F800 && r <= 0x1F8FF: // Supplemental Arrows-C
 	case r >= 0x1F900 && r <= 0x1F9FF: // Supplemental Symbols
 	case r >= 0x1FA00 && r <= 0x1FAFF: // Symbols and Pictographs Ext
 	case r >= 0x20000 && r <= 0x2FFFD: // CJK Ext B+
 	case r >= 0x30000 && r <= 0x3FFFD: // CJK Ext G+
+		return 2
 	default:
 		return 1
 	}

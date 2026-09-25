@@ -251,3 +251,30 @@ func TestMaskStyleEmpty(t *testing.T) {
 		t.Errorf("empty style mangled: %+v", s)
 	}
 }
+
+func TestNearest256Fallback(t *testing.T) {
+	got := nearest256(137, 89, 203)
+	if got < 0 || got > 255 {
+		t.Errorf("out of range: %d", got)
+	}
+
+	if got < 16 {
+		t.Errorf("expected cube/gray index, got %d", got)
+	}
+}
+
+func TestNearest256NoExactMatch(t *testing.T) {
+	cases := [][3]uint8{
+		{1, 1, 1},
+		{254, 254, 254},
+		{128, 64, 32},
+		{200, 100, 50},
+		{50, 100, 150},
+	}
+	for _, c := range cases {
+		got := nearest256(c[0], c[1], c[2])
+		if got < 0 || got > 255 {
+			t.Errorf("nearest256(%v) = %d", c, got)
+		}
+	}
+}

@@ -1,3 +1,4 @@
+// Пакет term предоставляет RawTerminal и его реализацию.
 package term
 
 import (

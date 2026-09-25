@@ -630,3 +630,39 @@ func TestDrawString(t *testing.T) {
 		term.DrawString(0, 0, Style{}, "abc") // не должно паниковать
 	})
 }
+
+func TestRuneWidth(t *testing.T) {
+	cases := []struct {
+		r    rune
+		want int
+	}{
+		{0, 0},
+		{'\n', 0},
+		{'\t', 0},
+		{0x7F, 0},
+		{'a', 1},
+		{'─', 1},
+		{'█', 1},
+		{'⠋', 1},
+		{0x0301, 0}, // combining
+		{0x200B, 0}, // zero-width space
+		{0xFE00, 0}, // variation selector
+		{0xFE20, 0}, // combining half marks
+		{'猫', 2},
+		{'中', 2},
+		{'あ', 2},
+		{'한', 2},
+		{'Ａ', 2}, // fullwidth A
+		{'😀', 2},
+		{'🚀', 2},
+		{'✅', 2},
+		{'⭐', 2},
+		{0x20000, 2}, // CJK Ext B
+		{0x30000, 2}, // CJK Ext G
+	}
+	for _, tc := range cases {
+		if got := RuneWidth(tc.r); got != tc.want {
+			t.Errorf("RuneWidth(%U) = %d, want %d", tc.r, got, tc.want)
+		}
+	}
+}

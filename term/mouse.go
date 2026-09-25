@@ -1,4 +1,3 @@
-// Добавлено в TUI 3.1.0.
 package term
 
 import (

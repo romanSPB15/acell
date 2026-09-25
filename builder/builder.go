@@ -1,3 +1,4 @@
+// Пакет builder предоставляет высокоэффективный Builder строк.
 package builder
 
 import (
@@ -12,6 +13,27 @@ type noCopy struct{}
 func (*noCopy) Lock()   {}
 func (*noCopy) Unlock() {}
 
+// Builder — переиспользуемый буфер для сборки строк без аллокаций.
+//
+// В отличие от strings.Builder, поддерживает запись чисел (WriteInt, WriteUint),
+// форматированный вывод (WriteFormat), доступ к байтам без копирования (Bytes) и
+// запись содержимого в io.Writer.
+// Внутренний буфер сохраняется между вызовами Reset, что делает Builder
+// пригодным для сборки кадров в горячем цикле рендеринга.
+//
+// Builder не безопасен для одновременного использования из нескольких горутин.
+// Содержит noCopy, поэтому vet предупредит о случайном копировании.
+//
+//	var bb builder.Builder
+//
+//	bb.WriteString("hello ")
+//	bb.WriteInt(42)
+//	bb.WriteByte('!')
+//	bb.WriteFormat(" package %s", "builder")
+//
+//	fmt.Println(bb.String()) // "hello 42! package builder"
+//	bb.Copy(myWriter)
+//	bb.Reset()
 type Builder struct {
 	_   noCopy
 	buf []byte
