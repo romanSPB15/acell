@@ -258,19 +258,27 @@ func (t *Terminal) Flush() {
 			if ch == 0 {
 				ch = ' '
 			}
+			rw := RuneWidth(ch)
+
+			if rw > 1 {
+				bb.WriteString("\033[2X")
+			}
 			bb.WriteRune(ch)
 
 			oldRow[x] = row[x]
 
-			rw := RuneWidth(ch)
-			x2 := x + rw
-			y2 := y
-			if x2 >= w {
-				x2 = 0
-				y2++
+			if rw > 1 {
 				t.cursorPos = pos{-1, -1}
 			} else {
-				t.cursorPos = pos{Line: y2, Col: x2}
+				x2 := x + rw
+				y2 := y
+				if x2 >= w {
+					x2 = 0
+					y2++
+					t.cursorPos = pos{-1, -1}
+				} else {
+					t.cursorPos = pos{Line: y2, Col: x2}
+				}
 			}
 
 			prevCharOriginal = currentCharOriginal
