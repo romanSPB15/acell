@@ -170,8 +170,6 @@ func (t *Terminal) Flush() {
 
 	changed := false
 
-	var prevCharOriginal rune
-
 	for y := range h {
 		row := t.Buf[y]
 		oldRow := t.oldBuf[y]
@@ -180,18 +178,8 @@ func (t *Terminal) Flush() {
 				continue
 			}
 
-			currentCharOriginal := oldRow[x].Char
-
 			if x > 0 && RuneWidth(row[x-1].Char) == 2 {
 				oldRow[x] = row[x]
-				prevCharOriginal = currentCharOriginal
-				continue
-			}
-
-			forceWrite := x > 0 && RuneWidth(prevCharOriginal) == 2
-
-			if !forceWrite && row[x] == oldRow[x] {
-				prevCharOriginal = currentCharOriginal
 				continue
 			}
 
@@ -280,8 +268,6 @@ func (t *Terminal) Flush() {
 					t.cursorPos = pos{Line: y2, Col: x2}
 				}
 			}
-
-			prevCharOriginal = currentCharOriginal
 		}
 	}
 
@@ -383,60 +369,21 @@ func (t *Terminal) DrawString(x, y int, style Style, str string) int {
 
 	total := 0
 	for _, r := range str {
-		rw, drawn := t.DrawRune(x, y, style, r)
+		rw := RuneWidth(r)
 		if rw == 0 {
-			continue // невидимая
+			continue
 		}
-		if !drawn {
-			break // не влезла — дальше тем более
+		if x >= 0 {
+			_, drawn := t.DrawRune(x, y, style, r)
+			if !drawn {
+				break
+			}
+			total += rw
 		}
 		x += rw
-		total += rw
 	}
 	return total
 }
-
-// DrawStringIgnoreWidth рисует строку без учёта ширины рун:
-// одна руна = одна ячейка. Полезно для ASCII-графики, где ширина
-// гарантированно равна 1, или когда нужно нарисовать «как есть».
-// func (t *Terminal) DrawStringIgnoreWidth(x, y int, style Style, str string) int {
-// 	if strings.ContainsAny(str, "\r\n") {
-// 		str = strings.ReplaceAll(str, "\r\n", "\n")
-// 		str = strings.ReplaceAll(str, "\r", "\n")
-// 		lines := strings.Split(str, "\n")
-// 		total := 0
-// 		for i, line := range lines {
-// 			total += t.DrawStringIgnoreWidth(x, y+i, style, line)
-// 		}
-// 		return total
-// 	}
-
-// 	h := len(t.Buf)
-// 	if y < 0 || y >= h {
-// 		return 0
-// 	}
-// 	w := len(t.Buf[y])
-// 	if w == 0 {
-// 		return 0
-// 	}
-
-// 	total := 0
-// 	cx := x
-// 	for _, r := range str {
-// 		if cx >= w {
-// 			break
-// 		}
-// 		if cx >= 0 {
-// 			if r == 0 {
-// 				r = ' '
-// 			}
-// 			t.Buf[y][cx] = Cell{Char: r, Style: style}
-// 			total++
-// 		}
-// 		cx++
-// 	}
-// 	return total
-// }
 
 // RuneWidth возвращает ширину руны в ячейках терминала:
 // 0 — невидимая (комбинирующие, zero-width, управляющие),
@@ -450,6 +397,11 @@ func RuneWidth(r rune) int {
 	if r < 0x20 || r == 0x7F {
 		return 0
 	}
+
+	if r < 0x7F {
+		return 1
+	}
+
 	// Комбинирующие и zero-width — 0
 	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
 		return 0
