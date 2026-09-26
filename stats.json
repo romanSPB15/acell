@@ -1,9 +1,9 @@
 {
-   "total_lines": 6003,
-   "code_lines": 4991,
-   "comment_lines": 237,
-   "empty_lines": 775,
-   "test_lines": 2325,
+   "total_lines": 6347,
+   "code_lines": 5301,
+   "comment_lines": 218,
+   "empty_lines": 828,
+   "test_lines": 2661,
    "files_count": 34,
    "test_files_count": 7
 }

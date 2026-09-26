@@ -3,6 +3,7 @@ package acell
 import (
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"unicode"
@@ -454,4 +455,38 @@ func RuneWidth(r rune) int {
 // содержимого, и diff-логика не знает, что реально на экране.
 func (t *Terminal) Invalidate() {
 	t.forceRedraw = true
+}
+
+// TTY возвращает потоки, пригодные для raw-режима и событий.
+//
+// Если управляющий терминал доступен (CONIN$/CONOUT$ на Windows,
+// /dev/tty на Unix) — возвращает его. Иначе падает обратно на
+// os.Stdin/os.Stdout.
+//
+// Полезно, когда stdin — pipe (например, `cat file | tmd -`),
+// но приложению нужен настоящий TTY: alt-screen, raw-режим,
+// события клавиатуры и мыши.
+//
+// Дескрипторы не нужно закрывать вручную — процесс освободит их
+// при выходе. Ручное закрытие до Terminal.Close() приведёт
+// к зависанию на Windows.
+func TTY() (io.Reader, io.Writer) {
+	if runtime.GOOS == "windows" {
+		in, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
+		if err != nil {
+			return os.Stdin, os.Stdout
+		}
+		out, err := os.OpenFile("CONOUT$", os.O_RDWR, 0)
+		if err != nil {
+			in.Close()
+			return os.Stdin, os.Stdout
+		}
+		return in, out
+	}
+
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return os.Stdin, os.Stdout
+	}
+	return tty, tty
 }
