@@ -35,6 +35,8 @@ type Terminal struct {
 
 	closeOnce sync.Once
 	closeErr  error
+
+	forceRedraw bool
 }
 
 // Default возвращает стандартные потоки ввода-вывода.
@@ -155,7 +157,10 @@ func (t *Terminal) Flush() {
 		return
 	}
 
-	if len(t.oldBuf) != h || len(t.oldBuf[0]) != w {
+	force := t.forceRedraw
+	t.forceRedraw = false
+
+	if force || len(t.oldBuf) != h || len(t.oldBuf[0]) != w {
 		t.oldBuf = NewBuf(w, h)
 		t.cursorPos = pos{-1, -1}
 		t.last = Style{}
@@ -174,7 +179,7 @@ func (t *Terminal) Flush() {
 		row := t.Buf[y]
 		oldRow := t.oldBuf[y]
 		for x := range w {
-			if row[x] == oldRow[x] {
+			if !force && row[x] == oldRow[x] {
 				continue
 			}
 
@@ -184,14 +189,6 @@ func (t *Terminal) Flush() {
 			}
 
 			changed = true
-
-			// if t.cursorPos.Line != y || t.cursorPos.Col != x {
-			// 	bb.WriteString("\033[")
-			// 	bb.WriteInt(y + 1)
-			// 	bb.WriteByte(';')
-			// 	bb.WriteInt(x + 1)
-			// 	bb.WriteByte('H')
-			// }
 
 			if t.cursorPos.Line != y || t.cursorPos.Col != x {
 				moved := false
@@ -450,4 +447,11 @@ func RuneWidth(r rune) int {
 		return 1
 	}
 	return 2
+}
+
+// Invalidate заставляет следующий Flush перерисовать весь экран
+// без сравнения с oldBuf. Нужен при ресайзе: терминал делает reflow
+// содержимого, и diff-логика не знает, что реально на экране.
+func (t *Terminal) Invalidate() {
+	t.forceRedraw = true
 }
