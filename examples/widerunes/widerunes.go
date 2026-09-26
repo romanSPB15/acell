@@ -109,6 +109,7 @@ func main() {
 				}
 			case *acell.ResizeEvent:
 				t.Buf = acell.NewBuf(e.Width, e.Height)
+				t.Invalidate()
 				render()
 			}
 		case <-ticker.C:

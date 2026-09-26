@@ -8,32 +8,37 @@ import (
 
 func main() {
 	in, out := acell.Default()
-	term := acell.New(in, out)
+	t := acell.New(in, out)
 
-	draw(term.Buf, time.Now())
-	term.Flush()
+	draw(t.Buf, time.Now())
+	t.Flush()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case ev := <-term.Events():
+		case ev := <-t.Events():
 			switch e := ev.(type) {
 			case *acell.KeyboardEvent:
 				if e.Rune == 'q' || e.Key == acell.KeyCtrlC {
-					term.Close()
+					t.Close()
 					return
 				}
 			case *acell.MouseEvent:
 				if e.Action == acell.MousePress {
-					drawAt(term.Buf, e.Pos.X, e.Pos.Y, 'X')
-					term.Flush()
+					drawAt(t.Buf, e.Pos.X, e.Pos.Y, 'X')
+					t.Flush()
 				}
+			case *acell.ResizeEvent:
+				t.Buf = acell.NewBuf(e.Width, e.Height)
+				t.Invalidate()
+				draw(t.Buf, time.Now())
+				t.Flush()
 			}
 		case now := <-ticker.C:
-			draw(term.Buf, now)
-			term.Flush()
+			draw(t.Buf, now)
+			t.Flush()
 		}
 	}
 }

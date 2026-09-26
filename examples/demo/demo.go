@@ -226,6 +226,10 @@ func main() {
 				if e.Key == acell.KeyCtrlC || e.Rune == 'q' || e.Key == acell.KeyEsc {
 					return
 				}
+			case *acell.ResizeEvent:
+				t.Buf = acell.NewBuf(e.Width, e.Height)
+				t.Invalidate()
+				render()
 			}
 		case <-ticker.C:
 			phase += 0.2

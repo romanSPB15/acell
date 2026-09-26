@@ -56,6 +56,7 @@ func main() {
                 }
             case *acell.ResizeEvent:
                 term.Buf = acell.NewBuf(e.Width, e.Height)
+                t.Invalidate()
                 term.Flush()
             }
         case <-ticker.C:
