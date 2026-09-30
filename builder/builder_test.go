@@ -2,6 +2,7 @@ package builder
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -116,19 +117,108 @@ func TestBuilder_Grow(t *testing.T) {
 }
 
 func TestBuilder_Copy(t *testing.T) {
-	b := &Builder{}
-	b.WriteString("hello")
-	var dst bytes.Buffer
-	n, err := b.Copy(&dst)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if n != 5 {
-		t.Errorf("Copy returned %d, want 5", n)
-	}
-	if got := dst.String(); got != "hello" {
-		t.Errorf("dst.String() = %q, want %q", got, "hello")
-	}
+	t.Run("happy path", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello")
+		var dst bytes.Buffer
+		n, err := b.Copy(&dst)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n != 5 {
+			t.Errorf("Copy returned %d, want 5", n)
+		}
+		if got := dst.String(); got != "hello" {
+			t.Errorf("dst.String() = %q, want %q", got, "hello")
+		}
+	})
+
+	t.Run("empty builder", func(t *testing.T) {
+		b := &Builder{}
+		var dst bytes.Buffer
+		n, err := b.Copy(&dst)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n != 0 {
+			t.Errorf("Copy returned %d, want 0", n)
+		}
+		if dst.Len() != 0 {
+			t.Errorf("dst not empty: %q", dst.String())
+		}
+	})
+
+	t.Run("partial writes via short writer", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello world")
+		w := &shortWriter{limit: 3}
+		n, err := b.Copy(w)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n != 11 {
+			t.Errorf("Copy returned %d, want 11", n)
+		}
+		if got := string(w.buf); got != "hello world" {
+			t.Errorf("written = %q, want %q", got, "hello world")
+		}
+	})
+
+	t.Run("write error", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello")
+		w := &errWriter{err: errTest}
+		n, err := b.Copy(w)
+		if !errors.Is(err, errTest) {
+			t.Fatalf("err = %v, want %v", err, errTest)
+		}
+		if n != 0 {
+			t.Errorf("Copy returned %d, want 0", n)
+		}
+	})
+
+	t.Run("partial then error", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello world")
+		w := &failAfterWriter{remaining: 5, err: errTest}
+		n, err := b.Copy(w)
+		if !errors.Is(err, errTest) {
+			t.Fatalf("err = %v, want %v", err, errTest)
+		}
+		if n != 5 {
+			t.Errorf("Copy returned %d, want 5", n)
+		}
+		if got := string(w.buf); got != "hello" {
+			t.Errorf("written = %q, want %q", got, "hello")
+		}
+	})
+
+	t.Run("zero write returns ErrShortWrite", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello")
+		n, err := b.Copy(&zeroWriter{})
+		if !errors.Is(err, io.ErrShortWrite) {
+			t.Fatalf("err = %v, want %v", err, io.ErrShortWrite)
+		}
+		if n != 0 {
+			t.Errorf("Copy returned %d, want 0", n)
+		}
+	})
+
+	t.Run("does not reset builder", func(t *testing.T) {
+		b := &Builder{}
+		b.WriteString("hello")
+		var dst bytes.Buffer
+		if _, err := b.Copy(&dst); err != nil {
+			t.Fatal(err)
+		}
+		if got := b.String(); got != "hello" {
+			t.Errorf("builder was modified: %q", got)
+		}
+		if b.Len() != 5 {
+			t.Errorf("Len = %d, want 5", b.Len())
+		}
+	})
 }
 
 func TestBuilder_WriteFormat(t *testing.T) {

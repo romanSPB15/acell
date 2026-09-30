@@ -1,6 +1,7 @@
 package acell
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -18,31 +19,137 @@ func TestDefault(t *testing.T) {
 	}
 }
 
-func TestNewWithTerm(t *testing.T) {
-	tr := newFakeRawTerminal()
-	NewWithTerm(tr)
+func TestNewWithInfo(t *testing.T) {
+	t.Run("uses passed info, not detected", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.Name = "custom"
+		info.AltScreenOn = ""
+		info.MouseAny = false
+		info.MouseSGR = false
+		info.WindowFocusEvents = false
+		info.CursorHide = ""
+		info.Sgr0 = ""
+		info.Home = ""
+		info.CursorHide = ""
 
-	if !tr.Raw() {
-		t.Fatal("terminal is not raw")
-	}
-	if !tr.ANSIEnabled() {
-		t.Fatal("ansi is not enabled")
-	}
-	if !tr.InputStarted() {
-		t.Fatal("input is not started")
-	}
+		term := newTerminal(tr, info)
+		defer term.Close()
 
-	out := tr.WrittenString()
-	for _, want := range []string{
-		"\033[?1049h", // alt-screen on
-		"\033[?1003h", // mouse any
-		"\033[?1006h", // mouse sgr
-		"\033[H",      // home
-		"\033[?25l",   // cursor hide
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("start: expected %q in %q", want, out)
+		if term.Info().Name != "custom" {
+			t.Errorf("Info().Name = %q", term.Info().Name)
 		}
+		if got := tr.WrittenString(); got != "" {
+			t.Errorf("expected empty start sequence, got %q", got)
+		}
+	})
+
+	t.Run("start sequence follows info", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.WindowFocusEvents = false
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		out := tr.WrittenString()
+		for _, want := range []string{
+			"\033[?1049h",
+			"\033[?1003h",
+			"\033[?1006h",
+			"\033[H",
+			"\033[?25l",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("expected %q in %q", want, out)
+			}
+		}
+		if strings.Contains(out, "\033[?1004h") {
+			t.Errorf("focus events must be off: %q", out)
+		}
+	})
+
+	t.Run("no cursor hide if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.CursorHide = ""
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		if strings.Contains(tr.WrittenString(), "\033[?25l") {
+			t.Errorf("unexpected cursor-hide")
+		}
+	})
+
+	t.Run("no mouse if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.MouseAny = false
+		info.MouseSGR = false
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		out := tr.WrittenString()
+		if strings.Contains(out, "\033[?1003h") || strings.Contains(out, "\033[?1006h") {
+			t.Errorf("unexpected mouse enable: %q", out)
+		}
+	})
+
+	t.Run("no alt screen if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.AltScreenOn = ""
+		info.AltScreenOff = ""
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		if strings.Contains(tr.WrittenString(), "\033[?1049h") {
+			t.Errorf("unexpected alt-screen")
+		}
+	})
+
+	t.Run("Close mirrors Info", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.CursorShow = ""
+		info.AltScreenOff = ""
+		info.WindowFocusEvents = false
+
+		term := newTerminal(tr, info)
+		tr.ResetWritten()
+
+		if err := term.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		out := tr.WrittenString()
+		if strings.Contains(out, "\033[?25h") || strings.Contains(out, "\033[?1049l") {
+			t.Errorf("unexpected restore sequences: %q", out)
+		}
+		if strings.Contains(out, "\033[?1004l") {
+			t.Errorf("unexpected focus-off: %q", out)
+		}
+	})
+}
+
+func TestNewWithTermUsesInfoFromTerm(t *testing.T) {
+	tr := newFakeRawTerminal()
+	info := terminfo.Default()
+	info.Name = "from-term"
+	info.CursorHide = ""
+	tr.SetInfo(info)
+
+	term := NewWithTerm(tr)
+	defer term.Close()
+
+	if term.Info().Name != "from-term" {
+		t.Errorf("Info().Name = %q", term.Info().Name)
+	}
+	if strings.Contains(tr.WrittenString(), "\033[?25l") {
+		t.Errorf("NewWithTerm must honor t.Info()")
 	}
 }
 
@@ -187,7 +294,7 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mA\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mA\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -201,7 +308,7 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H \033[?2026l"
+		want := "\033[?2026h\033[H \033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -218,13 +325,13 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mA\033[32mB\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mA\033[32mB\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
 	})
 
-	t.Run("row rollover doesn't emit CUP", func(t *testing.T) {
+	t.Run("row rollover emits CUP after line boundary", func(t *testing.T) {
 		tr := newFakeRawTerminal()
 		term := NewWithTerm(tr)
 		st := Style{Fg: "31"}
@@ -236,7 +343,7 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mABCD\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mAB\033[2;1HCD\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -253,7 +360,7 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mA\033[0mB\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mA\033[0mB\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -305,7 +412,7 @@ func TestFlush(t *testing.T) {
 		}}
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mAB\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mAB\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -322,7 +429,7 @@ func TestFlush(t *testing.T) {
 		term.Buf = [][]Cell{{{Char: 'A', Style: st}}}
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1H\033[31mA\033[?2026l"
+		want := "\033[?2026h\033[H\033[31mA\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -340,7 +447,7 @@ func TestFlush(t *testing.T) {
 		term.Buf[0][0] = Cell{Char: 'B', Style: st}
 		term.Flush()
 
-		want := "\033[?2026h\033[1;1HB\033[?2026l"
+		want := "\033[?2026h\033[HB\033[?2026l"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -358,7 +465,7 @@ func TestFlush(t *testing.T) {
 
 		term.Flush()
 
-		want := "\033[1;1H\033[31mA"
+		want := "\033[H\033[31mA"
 		if got := tr.WrittenString(); got != want {
 			t.Fatalf("want %q, got %q", want, got)
 		}
@@ -628,5 +735,552 @@ func TestDrawString(t *testing.T) {
 		term.Buf = [][]Cell{{}}
 
 		term.DrawString(0, 0, Style{}, "abc") // не должно паниковать
+	})
+
+	t.Run("only CR", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+
+		term.DrawString(0, 0, Style{}, "a\rb")
+		if term.Buf[1][0].Char != 'b' {
+			t.Errorf("[1][0] = %q, want 'b'", term.Buf[1][0].Char)
+		}
+	})
+
+	t.Run("only LF", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+
+		term.DrawString(0, 0, Style{}, "a\nb")
+		if term.Buf[1][0].Char != 'b' {
+			t.Errorf("[1][0] = %q, want 'b'", term.Buf[1][0].Char)
+		}
+	})
+}
+
+func TestRuneWidth(t *testing.T) {
+	cases := []struct {
+		r    rune
+		want int
+	}{
+		{0, 0},
+		{'\n', 0},
+		{'\t', 0},
+		{0x7F, 0},
+		{'a', 1},
+		{'─', 1},
+		{'█', 1},
+		{'⠋', 1},
+		{0x0301, 0}, // combining
+		{0x200B, 0}, // zero-width space
+		{0xFE00, 0}, // variation selector
+		{0xFE20, 0}, // combining half marks
+		{'猫', 2},
+		{'中', 2},
+		{'あ', 2},
+		{'한', 2},
+		{'Ａ', 2}, // fullwidth A
+		{'😀', 2},
+		{'🚀', 2},
+		{'✅', 2},
+		{'⭐', 2},
+		{0x20000, 2}, // CJK Ext B
+		{0x30000, 2}, // CJK Ext G
+	}
+	for _, tc := range cases {
+		if got := RuneWidth(tc.r); got != tc.want {
+			t.Errorf("RuneWidth(%U) = %d, want %d", tc.r, got, tc.want)
+		}
+	}
+}
+
+func TestDrawRuneWide(t *testing.T) {
+	t.Run("wide rune occupies two cells with placeholder", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 3)
+
+		w, drawn := term.DrawRune(0, 0, Style{Fg: "31"}, '猫')
+		if !drawn {
+			t.Fatalf("drawn = false")
+		}
+		if w != 2 {
+			t.Fatalf("width = %d, want 2", w)
+		}
+		if term.Buf[0][0].Char != '猫' {
+			t.Errorf("[0][0] = %q, want '猫'", term.Buf[0][0].Char)
+		}
+		if term.Buf[0][1].Char != ' ' {
+			t.Errorf("[0][1] = %q, want ' '", term.Buf[0][1].Char)
+		}
+		if term.Buf[0][0].Style.Fg != "31" || term.Buf[0][1].Style.Fg != "31" {
+			t.Errorf("placeholder style mismatch")
+		}
+	})
+
+	t.Run("wide rune doesn't fit on right edge", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(5, 1)
+
+		w, drawn := term.DrawRune(4, 0, Style{}, '猫')
+		if drawn {
+			t.Fatalf("drawn = true, want false")
+		}
+		if w != 2 {
+			t.Fatalf("width = %d, want 2", w)
+		}
+		for x := 0; x < 5; x++ {
+			if term.Buf[0][x].Char != ' ' {
+				t.Errorf("[%d] = %q, want ' '", x, term.Buf[0][x].Char)
+			}
+		}
+	})
+
+	t.Run("wide rune at last valid position", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(5, 1)
+
+		w, drawn := term.DrawRune(3, 0, Style{}, '猫')
+		if !drawn || w != 2 {
+			t.Fatalf("drawn=%v width=%d, want true/2", drawn, w)
+		}
+		if term.Buf[0][3].Char != '猫' || term.Buf[0][4].Char != ' ' {
+			t.Errorf("wrong cells: [3]=%q [4]=%q", term.Buf[0][3].Char, term.Buf[0][4].Char)
+		}
+	})
+
+	t.Run("wide rune overwrites previous narrow", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 1)
+		term.Buf[0][0] = Cell{Char: 'A'}
+		term.Buf[0][1] = Cell{Char: 'B'}
+
+		term.DrawRune(0, 0, Style{}, '猫')
+
+		if term.Buf[0][0].Char != '猫' {
+			t.Errorf("[0] = %q, want '猫'", term.Buf[0][0].Char)
+		}
+		if term.Buf[0][1].Char != ' ' {
+			t.Errorf("[1] = %q, want ' '", term.Buf[0][1].Char)
+		}
+	})
+
+	t.Run("wide rune at y out of bounds", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 3)
+
+		if w, drawn := term.DrawRune(0, 100, Style{}, '猫'); drawn || w != 2 {
+			t.Errorf("y=100: drawn=%v w=%d, want false/2", drawn, w)
+		}
+		if w, drawn := term.DrawRune(0, -1, Style{}, '猫'); drawn || w != 2 {
+			t.Errorf("y=-1: drawn=%v w=%d, want false/2", drawn, w)
+		}
+	})
+
+	t.Run("wide rune with negative x", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 1)
+
+		if w, drawn := term.DrawRune(-1, 0, Style{}, '猫'); drawn || w != 2 {
+			t.Errorf("x=-1: drawn=%v w=%d, want false/2", drawn, w)
+		}
+	})
+
+	t.Run("empty buffer", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = nil
+
+		if w, drawn := term.DrawRune(0, 0, Style{}, '猫'); drawn || w != 2 {
+			t.Errorf("nil buf: drawn=%v w=%d, want false/2", drawn, w)
+		}
+	})
+
+	t.Run("zero-width row", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = [][]Cell{{}}
+
+		if w, drawn := term.DrawRune(0, 0, Style{}, '猫'); drawn || w != 2 {
+			t.Errorf("zero-width: drawn=%v w=%d, want false/2", drawn, w)
+		}
+	})
+
+	t.Run("two wide runes side by side", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 1)
+
+		term.DrawRune(0, 0, Style{}, '猫')
+		term.DrawRune(2, 0, Style{}, '中')
+
+		want := []rune{'猫', ' ', '中', ' '}
+		for i, ch := range want {
+			if term.Buf[0][i].Char != ch {
+				t.Errorf("[%d] = %q, want %q", i, term.Buf[0][i].Char, ch)
+			}
+		}
+	})
+
+	t.Run("wide rune after wide rune without gap", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(10, 1)
+
+		term.DrawRune(0, 0, Style{}, '猫')
+		// перезаписываем placeholder вторым широким
+		term.DrawRune(1, 0, Style{}, '中')
+
+		if term.Buf[0][0].Char != '猫' {
+			t.Errorf("[0] = %q, want '猫'", term.Buf[0][0].Char)
+		}
+		if term.Buf[0][1].Char != '中' {
+			t.Errorf("[1] = %q, want '中'", term.Buf[0][1].Char)
+		}
+		if term.Buf[0][2].Char != ' ' {
+			t.Errorf("[2] = %q, want ' '", term.Buf[0][2].Char)
+		}
+	})
+
+	t.Run("narrow rune one cell", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(5, 1)
+
+		w, drawn := term.DrawRune(1, 0, Style{Fg: "32"}, 'a')
+		if !drawn || w != 1 {
+			t.Fatalf("drawn=%v w=%d, want true/1", drawn, w)
+		}
+		if term.Buf[0][1].Char != 'a' {
+			t.Errorf("[1] = %q, want 'a'", term.Buf[0][1].Char)
+		}
+		// соседняя клетка не тронута
+		if term.Buf[0][2].Char != ' ' {
+			t.Errorf("[2] = %q, want ' ' (not touched)", term.Buf[0][2].Char)
+		}
+	})
+
+	t.Run("zero rune becomes space", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(5, 1)
+
+		w, drawn := term.DrawRune(0, 0, Style{}, 0)
+		if drawn || w != 0 {
+			t.Fatalf("drawn=%v w=%d, want false/0", drawn, w)
+		}
+	})
+
+	t.Run("combining rune returns zero width not drawn", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = NewBuf(5, 1)
+
+		w, drawn := term.DrawRune(0, 0, Style{}, 0x0301)
+		if drawn || w != 0 {
+			t.Fatalf("combining: drawn=%v w=%d, want false/0", drawn, w)
+		}
+	})
+}
+
+func TestFlushCursorAndWide(t *testing.T) {
+	t.Run("CUF when dx == 2", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = buildBuf(1, 10, ' ', Style{})
+		term.Buf[0][0] = Cell{Char: 'A'}
+		term.Flush()
+		tr.ResetWritten()
+
+		term.Buf[0][3] = Cell{Char: 'B'}
+		term.Flush()
+
+		want := "\033[?2026h\033[2CB\033[?2026l"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("CUF when dx == 4", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = buildBuf(1, 12, ' ', Style{})
+		term.Buf[0][0] = Cell{Char: 'A'}
+		term.Flush()
+		tr.ResetWritten()
+
+		term.Buf[0][5] = Cell{Char: 'B'}
+		term.Flush()
+
+		want := "\033[?2026h\033[4CB\033[?2026l"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("no CUF when dx > 4 — fallback to CUP", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = buildBuf(1, 15, ' ', Style{})
+		term.Buf[0][0] = Cell{Char: 'A'}
+		term.Flush()
+		tr.ResetWritten()
+
+		term.Buf[0][10] = Cell{Char: 'B'}
+		term.Flush()
+
+		want := "\033[?2026h\033[1;11HB\033[?2026l"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("CUD when dy == 1", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = buildBuf(5, 5, ' ', Style{})
+		term.Buf[0][2] = Cell{Char: 'A'}
+		term.Flush()
+		tr.ResetWritten()
+
+		term.Buf[1][3] = Cell{Char: 'B'}
+		term.Flush()
+
+		want := "\033[?2026h\033[BB\033[?2026l"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("CUD when dy == 3", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf = buildBuf(6, 5, ' ', Style{})
+		term.Buf[0][2] = Cell{Char: 'A'}
+		term.Flush()
+		tr.ResetWritten()
+
+		term.Buf[3][3] = Cell{Char: 'B'}
+		term.Flush()
+
+		want := "\033[?2026h\033[3BB\033[?2026l"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+}
+
+func TestInfoMethod(t *testing.T) {
+	tr := newFakeRawTerminal()
+	info := terminfo.Default()
+	info.Name = "custom-info"
+	tr.SetInfo(info)
+
+	term := NewWithTerm(tr)
+	if term.Info().Name != "custom-info" {
+		t.Errorf("Info().Name = %q", term.Info().Name)
+	}
+}
+
+func TestCloseRestoreError(t *testing.T) {
+	tr := newFakeRawTerminal()
+	want := errors.New("restore failed")
+	tr.SetRestoreErr(want)
+
+	term := NewWithTerm(tr)
+	if err := term.Close(); !errors.Is(err, want) {
+		t.Errorf("got %v, want %v", err, want)
+	}
+}
+
+func TestCloseError(t *testing.T) {
+	tr := newFakeRawTerminal()
+	want := errors.New("close failed")
+	tr.SetCloseErr(want)
+
+	term := NewWithTerm(tr)
+	if err := term.Close(); !errors.Is(err, want) {
+		t.Errorf("got %v, want %v", err, want)
+	}
+}
+
+func TestClearAndFill(t *testing.T) {
+	raw := newFakeRawTerminal()
+	term := NewWithTerm(raw)
+	term.Clear()
+
+	for y, v2 := range term.Buf {
+		for x, v := range v2 {
+			if v != (Cell{Char: ' '}) {
+				t.Fatalf("invalid cell at [%d, %d]: expected empty, but got: %v", x, y, v)
+			}
+		}
+	}
+
+	c := Cell{Char: '#', Style: Style{Fg: FgDarkCyan}}
+
+	term.Fill(c)
+
+	for y, v2 := range term.Buf {
+		for x, v := range v2 {
+			if v != c {
+				t.Fatalf("invalid cell at [%d, %d]: expected %v, but got: %v", x, y, c, v)
+			}
+		}
+	}
+}
+
+func TestSetTitle(t *testing.T) {
+	t.Run("simple", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("hello")
+
+		want := "\033]0;hello\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("empty title", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("")
+
+		want := "\033]0;\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("strips control characters", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		// \033 и \007 могли бы вырваться из OSC, \n обрывает title
+		// на части терминалов. Все должны быть вырезаны.
+		term.SetTitle("evil\033[2J\007title\nnewline\ttab")
+
+		want := "\033]0;evil[2Jtitlenewlinetab\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("keeps unicode", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("привет 🚀 你好")
+
+		want := "\033]0;привет 🚀 你好\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("strips DEL", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("a\x7Fb")
+
+		want := "\033]0;ab\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("does not touch buffer", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf[0][0] = Cell{Char: 'A'}
+		tr.ResetWritten()
+
+		term.SetTitle("hello")
+		term.Flush()
+
+		out := tr.WrittenString()
+		if !strings.Contains(out, "A") {
+			t.Errorf("flush after SetTitle lost buffer content: %q", out)
+		}
+	})
+}
+
+func TestWrite(t *testing.T) {
+	t.Run("writes bytes directly", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write([]byte("hello"))
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if n != 5 {
+			t.Fatalf("n = %d, want 5", n)
+		}
+		if got := tr.WrittenString(); got != "hello" {
+			t.Fatalf("want %q, got %q", "hello", got)
+		}
+	})
+
+	t.Run("returns writer error", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		want := errors.New("write failed")
+		tr.SetWriteErr(want)
+
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write([]byte("hello"))
+		if !errors.Is(err, want) {
+			t.Fatalf("err = %v, want %v", err, want)
+		}
+		if n != 0 {
+			t.Fatalf("n = %d, want 0", n)
+		}
+	})
+
+	t.Run("multiple writes append", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.Write([]byte("foo"))
+		term.Write([]byte("bar"))
+
+		if got := tr.WrittenString(); got != "foobar" {
+			t.Fatalf("want %q, got %q", "foobar", got)
+		}
+	})
+
+	t.Run("empty write", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write(nil)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if n != 0 {
+			t.Fatalf("n = %d, want 0", n)
+		}
+		if got := tr.WrittenString(); got != "" {
+			t.Fatalf("expected no output, got %q", got)
+		}
 	})
 }
