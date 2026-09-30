@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/romanSPB15/acell/input"
 	"github.com/romanSPB15/acell/terminfo"
 	"golang.org/x/term"
 )
@@ -211,15 +212,7 @@ func (rt *rawTerminal) inputLoop() {
 }
 
 func (rt *rawTerminal) dispatch(data []byte) {
-	if ev := parseFocusEvent(data); ev != nil {
-		rt.emit(ev)
-		return
-	}
-	if ev := parseMouseEvent(data); ev != nil {
-		rt.emit(ev)
-		return
-	}
-	if ev := parseKeyboardInput(data); ev != nil {
+	if ev := input.Parse(data); ev != nil {
 		rt.emit(ev)
 	}
 }

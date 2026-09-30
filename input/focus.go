@@ -1,4 +1,4 @@
-package term
+package input
 
 // WindowFocusEvent — окно терминала получило или потеряло фокус
 // (DECSET 1004, CSI I / CSI O).
@@ -11,9 +11,9 @@ const (
 	focusOutSeq = "\x1b[O"
 )
 
-func parseFocusEvent(data []byte) *WindowFocusEvent {
-	s := string(data)
-	switch s {
+// ParseFocus разбирает последовательность фокуса окна.
+func ParseFocus(data []byte) *WindowFocusEvent {
+	switch string(data) {
 	case focusInSeq:
 		return &WindowFocusEvent{Focused: true}
 	case focusOutSeq:

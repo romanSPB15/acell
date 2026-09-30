@@ -1,17 +1,18 @@
-package term
+package input
 
 import "unicode/utf8"
 
-// KeyboardEvent преставляет собой событие клавиатуры.
+// KeyboardEvent представляет собой событие клавиатуры.
 type KeyboardEvent struct {
 	Key  Key
 	Rune rune
 	Alt  bool
 }
 
+// Key — код клавиши.
 type Key uint16
 
-// Клавиши на клавиатуре.
+// Клавиши.
 const (
 	KeyUnknown Key = iota
 
@@ -104,7 +105,33 @@ var keyMap = map[string]Key{
 	string([]byte{27, 91, 68}):          KeyArrowLeft,
 }
 
-func parseAnsiKeyboardInput(data []byte) (rune, Key) {
+// ParseKeyboard разбирает байты в событие клавиатуры.
+// Возвращает nil, если данные не являются клавиатурным вводом
+// (например, это mouse-последовательность).
+func ParseKeyboard(data []byte) *KeyboardEvent {
+	if len(data) == 0 {
+		return nil
+	}
+	if len(data) > 2 && data[0] == 27 && data[1] == '[' && data[2] == '<' {
+		return nil
+	}
+
+	alt := false
+	r, k := parseAnsi(data)
+
+	if r == 0 && k == KeyUnknown && len(data) >= 2 && data[0] == 27 {
+		alt = true
+		r, k = parseAnsi(data[1:])
+	}
+
+	if r == 0 && k == KeyUnknown {
+		return nil
+	}
+
+	return &KeyboardEvent{Key: k, Rune: r, Alt: alt}
+}
+
+func parseAnsi(data []byte) (rune, Key) {
 	if len(data) == 1 {
 		v := data[0]
 		switch {
@@ -131,46 +158,14 @@ func parseAnsiKeyboardInput(data []byte) (rune, Key) {
 			return 0, KeyUnknown
 		}
 	}
-	key := string(data)
-	if v, ok := keyMap[key]; ok {
+	if v, ok := keyMap[string(data)]; ok {
 		return 0, v
 	}
-
 	if len(data) > 1 && data[0] != 27 {
 		r, _ := utf8.DecodeRune(data)
 		if r != utf8.RuneError {
 			return r, KeyUnknown
 		}
 	}
-
 	return 0, KeyUnknown
-}
-
-func parseKeyboardInput(data []byte) *KeyboardEvent {
-	if len(data) == 0 {
-		return nil
-	}
-	if len(data) > 2 && data[0] == 27 && data[1] == '[' && data[2] == '<' {
-		return nil
-	}
-	var alt = false
-	var r rune
-	var k Key
-
-	r, k = parseAnsiKeyboardInput(data)
-
-	if r == 0 && k == KeyUnknown && len(data) >= 2 && data[0] == 27 {
-		alt = true
-		r, k = parseAnsiKeyboardInput(data[1:])
-	}
-
-	if r == 0 && k == KeyUnknown {
-		return nil
-	}
-
-	return &KeyboardEvent{
-		Key:  k,
-		Rune: r,
-		Alt:  alt,
-	}
 }

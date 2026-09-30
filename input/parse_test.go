@@ -1,11 +1,11 @@
-package term
+package input
 
 import (
 	"reflect"
 	"testing"
 )
 
-func TestParseAnsiKeyboardInput(t *testing.T) {
+func TestParseAnsi(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     []byte
@@ -51,7 +51,7 @@ func TestParseAnsiKeyboardInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, k := parseAnsiKeyboardInput(tt.data)
+			r, k := parseAnsi(tt.data)
 			if r != tt.wantRune || k != tt.wantKey {
 				t.Errorf("got (%q, %v), want (%q, %v)", r, k, tt.wantRune, tt.wantKey)
 			}
@@ -59,7 +59,7 @@ func TestParseAnsiKeyboardInput(t *testing.T) {
 	}
 }
 
-func TestParseKeyboardInput(t *testing.T) {
+func TestParseKeyboard(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -73,10 +73,14 @@ func TestParseKeyboardInput(t *testing.T) {
 		{"alt+enter", []byte{27, 13}, &KeyboardEvent{Key: KeyEnter, Rune: 0, Alt: true}},
 		{"alt+up", []byte{27, 27, 91, 65}, &KeyboardEvent{Key: KeyArrowUp, Rune: 0, Alt: true}},
 		{"unknown", []byte{0}, nil},
+
+		// Mouse-последовательность не должна разбираться как клавиатура:
+		// иначе ESC съестся и мы получим мусорное событие.
+		{"mouse seq returns nil", []byte("\x1b[<0;10;20M"), nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseKeyboardInput(tt.data)
+			got := ParseKeyboard(tt.data)
 			if !reflect.DeepEqual(got, tt.want) {
 				if got == nil {
 					t.Errorf("got <nil>, want %v", *tt.want)
@@ -88,7 +92,7 @@ func TestParseKeyboardInput(t *testing.T) {
 	}
 }
 
-func TestParseMouseEvent(t *testing.T) {
+func TestParseMouse(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -124,10 +128,66 @@ func TestParseMouseEvent(t *testing.T) {
 		{"negative cb", []byte("\x1b[<-1;10;20M"), nil},
 		{"empty", []byte{}, nil},
 		{"short", []byte("\x1b[<"), nil},
+
+		// Keyboard-последовательность не должна разбираться как мышь.
+		{"keyboard seq returns nil", []byte{'a'}, nil},
+		{"arrow returns nil", []byte{27, 91, 65}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseMouseEvent(tt.data)
+			got := ParseMouse(tt.data)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParsePriority(t *testing.T) {
+	cases := []struct {
+		name string
+		data []byte
+		want any
+	}{
+		{"focus in", []byte("\x1b[I"), (*WindowFocusEvent)(nil)},
+		{"focus out", []byte("\x1b[O"), (*WindowFocusEvent)(nil)},
+		{"mouse", []byte("\x1b[<0;10;20M"), (*MouseEvent)(nil)},
+		{"keyboard rune", []byte{'a'}, (*KeyboardEvent)(nil)},
+		{"keyboard arrow", []byte{27, 91, 65}, (*KeyboardEvent)(nil)},
+		{"garbage", []byte{0xff, 0xff}, nil},
+		{"empty", []byte{}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Parse(tc.data)
+			if tc.want == nil {
+				if got != nil {
+					t.Errorf("got %T, want nil", got)
+				}
+				return
+			}
+			if reflect.TypeOf(got) != reflect.TypeOf(tc.want) {
+				t.Errorf("got %T, want %T", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseFocus(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want *WindowFocusEvent
+	}{
+		{"focus in", []byte("\x1b[I"), &WindowFocusEvent{Focused: true}},
+		{"focus out", []byte("\x1b[O"), &WindowFocusEvent{Focused: false}},
+		{"garbage", []byte("abc"), nil},
+		{"empty", nil, nil},
+		{"keyboard", []byte{'a'}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseFocus(tt.data)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
