@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/romanSPB15/acell/terminfo"
 	"golang.org/x/term"
@@ -23,12 +24,10 @@ type rawTerminal struct {
 	inFile  *os.File // если in удалось привести к *os.File
 	outFile *os.File // если out удалось привести к *os.File
 
-	events chan any
-	stopCh chan struct{}
-	once   sync.Once
-
-	resizeHandlers []func(w, h int)
-	resizeMu       sync.Mutex
+	events  chan any
+	inputCh chan []byte // сюда пишет readLoop, оттуда читает inputLoop
+	stopCh  chan struct{}
+	once    sync.Once
 
 	lastW, lastH int
 
@@ -45,7 +44,7 @@ func (t *rawTerminal) Info() terminfo.Info {
 // NewRawTerminal оборачивает in/out в RawTerminal.
 //
 // Если in или out являются *os.File, операции с терминалом
-// (MakeRaw, SizeFd, EnableANSI) используют их файловые дескрипторы.
+// (MakeRaw, Size, EnableANSI) используют их файловые дескрипторы.
 // В противном случае эти операции возвращают ошибку или ничего не делают.
 //
 // in/out можно передать nil — тогда используются os.Stdin / os.Stdout.
@@ -58,11 +57,12 @@ func NewRawTerminal(in io.Reader, out io.Writer) RawTerminal {
 	}
 
 	rt := &rawTerminal{
-		in:     in,
-		out:    out,
-		events: make(chan any, 64),
-		stopCh: make(chan struct{}),
-		info:   terminfo.Detect(),
+		in:      in,
+		out:     out,
+		events:  make(chan any, 64),
+		inputCh: make(chan []byte, 16),
+		stopCh:  make(chan struct{}),
+		info:    terminfo.Detect(),
 	}
 	if f, ok := in.(*os.File); ok {
 		rt.inFile = f
@@ -74,12 +74,10 @@ func NewRawTerminal(in io.Reader, out io.Writer) RawTerminal {
 	return rt
 }
 
-// StartInput запускает чтение из in.
+// StartInput запускает чтение из in и рассылку событий.
 func (rt *rawTerminal) StartInput() {
-	inputCh := onInput(nil)
-	start(rt.in)
-
-	go rt.inputLoop(inputCh)
+	go rt.readLoop()
+	go rt.inputLoop()
 	go rt.resizeLoop()
 }
 
@@ -90,7 +88,7 @@ func (rt *rawTerminal) Write(p []byte) (int, error) {
 
 // Read реализует io.Reader.
 //
-// Внимание: одновременный вызов Read и работа inputLoop могут
+// Внимание: одновременный вызов Read и работа readLoop могут
 // конфликтовать за одни и те же байты. Обычно Read нужен только
 // для тестов или для интеграции с внешним event loop.
 func (rt *rawTerminal) Read(p []byte) (int, error) {
@@ -130,14 +128,14 @@ func (rt *rawTerminal) EnableANSI() error {
 	return nil
 }
 
-// Events возвращает канал событий: *KeyboardEvent, *MouseEvent, *ResizeEvent.
+// Events возвращает канал событий: *KeyboardEvent, *MouseEvent,
+// *ResizeEvent, *WindowFocusEvent.
 // Канал буферизован; при переполнении события отбрасываются.
 func (rt *rawTerminal) Events() <-chan any {
 	return rt.events
 }
 
-// Close останавливает event loop и восстанавливает терминал.
-// Идемпотентен.
+// Close останавливает чтение и восстанавливает терминал. Идемпотентен.
 func (rt *rawTerminal) Close() error {
 	rt.once.Do(func() {
 		close(rt.stopCh)
@@ -150,12 +148,60 @@ func (rt *rawTerminal) Close() error {
 	return nil
 }
 
-func (rt *rawTerminal) inputLoop(inputCh <-chan []byte) {
+// readLoop читает байты из rt.in и складывает их в rt.inputCh.
+//
+// Если rt.in реализует SetReadDeadline, чтение прерывается раз в 50мс —
+// это позволяет проверять stopCh на закрытие. Иначе Close повиснет
+// на блокирующем Read.
+func (rt *rawTerminal) readLoop() {
+	buf := make([]byte, 1024)
+
+	type deadlineReader interface {
+		SetReadDeadline(time.Time) error
+	}
+	dr, hasDeadline := rt.in.(deadlineReader)
+
+	for {
+		if hasDeadline {
+			dr.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		}
+
+		n, err := rt.in.Read(buf)
+		if err != nil {
+			if os.IsTimeout(err) {
+				select {
+				case <-rt.stopCh:
+					return
+				default:
+					continue
+				}
+			}
+			return
+		}
+		if n == 0 {
+			continue
+		}
+
+		data := make([]byte, n)
+		copy(data, buf[:n])
+
+		select {
+		case <-rt.stopCh:
+			return
+		case rt.inputCh <- data:
+		default:
+			// Канал полон — дропаем, чтобы не блокировать чтение.
+		}
+	}
+}
+
+// inputLoop читает из rt.inputCh и разбирает на события.
+func (rt *rawTerminal) inputLoop() {
 	for {
 		select {
 		case <-rt.stopCh:
 			return
-		case data, ok := <-inputCh:
+		case data, ok := <-rt.inputCh:
 			if !ok {
 				return
 			}
@@ -183,7 +229,7 @@ func (rt *rawTerminal) emit(ev any) {
 	case <-rt.stopCh:
 	case rt.events <- ev:
 	default:
-
+		// Канал событий полон — дропаем, чтобы не блокировать.
 	}
 }
 

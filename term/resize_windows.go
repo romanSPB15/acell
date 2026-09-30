@@ -31,11 +31,4 @@ func (rt *rawTerminal) handleResize() {
 	}
 	rt.lastW, rt.lastH = nw, nh
 	rt.emit(&ResizeEvent{Width: nw, Height: nh})
-
-	rt.resizeMu.Lock()
-	handlers := rt.resizeHandlers
-	rt.resizeMu.Unlock()
-	for _, fn := range handlers {
-		fn(nw, nh)
-	}
 }
