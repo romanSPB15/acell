@@ -30,6 +30,7 @@ type fakeRawTerminal struct {
 	restoreErr    error
 	enableANSIErr error
 	closeErr      error
+	writeErr      error
 }
 
 func newFakeRawTerminal() *fakeRawTerminal {
@@ -62,15 +63,6 @@ func newFakeRawTerminal() *fakeRawTerminal {
 			SynchronizedUpdate: true,
 		},
 	}
-}
-
-func (f *fakeRawTerminal) Write(p []byte) (int, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.closed {
-		return 0, io.ErrClosedPipe
-	}
-	return f.written.Write(p)
 }
 
 func (f *fakeRawTerminal) Read(p []byte) (int, error) {
@@ -237,4 +229,15 @@ func (f *fakeRawTerminal) SetInfo(info terminfo.Info) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.info = info
+}
+
+func (t *fakeRawTerminal) Write(p []byte) (int, error) {
+	if t.writeErr != nil {
+		return 0, t.writeErr
+	}
+	return t.written.Write(p)
+}
+
+func (t *fakeRawTerminal) SetWriteErr(err error) {
+	t.writeErr = err
 }

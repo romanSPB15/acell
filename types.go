@@ -1,6 +1,8 @@
 package acell
 
-import "github.com/romanSPB15/acell/term"
+import (
+	"github.com/romanSPB15/acell/term"
+)
 
 // Типы событий и клавиатуры.
 type (
@@ -24,6 +26,9 @@ type (
 
 	// RawTerminal — низкоуровневый интерфейс терминала.
 	RawTerminal = term.RawTerminal
+
+	// WindowFocusEvent — событие фокуса окна терминала.
+	WindowFocusEvent = term.WindowFocusEvent
 )
 
 // Функциональные клавиши F1–F12.
@@ -101,14 +106,20 @@ const (
 
 // Действия мыши.
 const (
-	MousePress      = term.MousePress
-	MouseRelease    = term.MouseRelease
-	MouseMove       = term.MouseMove
-	MouseWheelUp    = term.MouseWheelUp
-	MouseWheelDown  = term.MouseWheelDown
-	MouseWheelLeft  = term.MouseWheelLeft
-	MouseWheelRight = term.MouseWheelRight
+	MousePress     = term.MousePress
+	MouseRelease   = term.MouseRelease
+	MouseMove      = term.MouseMove
+	MouseWheelUp   = term.MouseWheelUp
+	MouseWheelDown = term.MouseWheelDown
 
 	// NoButton — отсутствие нажатой кнопки мыши.
 	NoButton = term.NoButton
+)
+
+// MouseWheelLeft и MouseWheelRight поддерживаются не всеми
+// терминалами (SGR buttons 66/67). Требуют tilt-колесо мыши
+// или горизонтальный жест трекпада.
+const (
+	MouseWheelLeft  = term.MouseWheelLeft
+	MouseWheelRight = term.MouseWheelRight
 )

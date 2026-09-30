@@ -25,7 +25,7 @@ func (cb ColorBits) String() string {
 	case Color16:
 		return "16-colors"
 	case Color256:
-		return "256-color"
+		return "256-colors"
 	case ColorTrue:
 		return "True Color"
 	}
@@ -40,7 +40,6 @@ func (c ColorBits) MarshalJSON() ([]byte, error) {
 type Info struct {
 	Name string
 
-	// Colors — глубина цвета.
 	Colors ColorBits
 
 	CursorHide string
@@ -68,9 +67,39 @@ type Info struct {
 	MouseSGR bool
 
 	SynchronizedUpdate bool
+	WindowFocusEvents  bool
 }
 
-// Default возвращает Info с полным набором возможностей (xterm-256color).
+var All = Info{
+	Name:   "terminal",
+	Colors: ColorTrue,
+
+	CursorHide:   "\033[?25l",
+	CursorShow:   "\033[?12l\033[?25h",
+	AltScreenOn:  "\033[?1049h",
+	AltScreenOff: "\033[?1049l",
+	Clear:        "\033[2J\033[H",
+	Home:         "\033[H",
+
+	Sgr0: "\033(B\033[m",
+	Op:   "\033[39;49m",
+
+	Bold:      true,
+	Dim:       true,
+	Italic:    true,
+	Underline: true,
+	Reverse:   true,
+	Blink:     true,
+	Hidden:    true,
+	Strike:    true,
+
+	MouseAny: true,
+	MouseSGR: true,
+
+	SynchronizedUpdate: true,
+	WindowFocusEvents:  true,
+}
+
 func Default() Info {
 	return Info{
 		Name:   "xterm-256color",
@@ -99,6 +128,7 @@ func Default() Info {
 		MouseSGR: true,
 
 		SynchronizedUpdate: true,
+		WindowFocusEvents:  true,
 	}
 }
 
@@ -151,6 +181,7 @@ func Detect() Info {
 		info.MouseSGR = false
 		info.CursorHide = ""
 		info.CursorShow = ""
+		info.WindowFocusEvents = false
 
 		return info
 	}
@@ -203,6 +234,7 @@ func Detect() Info {
 		info.MouseAny = false
 		info.MouseSGR = false
 		info.SynchronizedUpdate = false
+		info.WindowFocusEvents = false
 		return info
 	}
 
@@ -220,6 +252,7 @@ func Detect() Info {
 			info.Strike = false
 			info.CursorHide = ""
 			info.CursorShow = ""
+			info.WindowFocusEvents = false
 		}
 
 		return info

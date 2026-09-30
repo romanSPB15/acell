@@ -9,8 +9,8 @@
 
 **Низкоуровневый cell-based терминальный слой для Go.**
 
-- 🚀 **~5000 FPS** на бенчмарке — в 2 раза быстрее tcell v3
 - 🎯 Полная поддержка мыши: клик, отпускание, движение, скролл (SGR 1006)
+- 🚀 5000 FPS на бенчмарке — в 2 раза быстрее tcell v3
 - 🎨 Автоматический downsampling цветов — TrueColor → 256 → 16 → 8 под возможности терминала
 - 🎁 Windows без WSL, без CGO
 - 📦 Всего две зависимости — `x/sys` и `x/term`
@@ -23,48 +23,39 @@
 ```go
 package main
 
-import (
-    "time"
-    "github.com/romanSPB15/acell"
-)
+import "github.com/romanSPB15/acell"
 
 func main() {
-    in, out := acell.Default()
-    term := acell.New(in, out)
-    defer term.Close()
+	in, out := acell.Default()
+	t := acell.New(in, out)
+	defer t.Close()
 
-    // term.Buf уже размечен под размер терминала и заполнен пробелами.
-    term.Buf[0][0] = acell.Cell{Char: 'H', Style: acell.Style{Fg: "32", Args: acell.Bold}}
-    term.Buf[0][1] = acell.Cell{Char: 'i'}
-    term.Flush()
+	draw := func() {
+		t.Clear()
+		t.DrawString(0, 0, acell.Style{}, "Hello,")
+		t.DrawString(7, 0, acell.Style{Fg: acell.FgRed, Args: acell.Bold}, "acell")
+		t.DrawRune(12, 0, acell.Style{}, '!')
+		t.DrawString(0, 2, acell.Style{Fg: acell.Fg16Grey}, "press q to quit")
+		t.Flush()
+	}
 
-    ticker := time.NewTicker(time.Second)
-    defer ticker.Stop()
+	draw()
 
-    for {
-        select {
-        case ev := <-term.Events():
-            switch e := ev.(type) {
-            case *acell.KeyboardEvent:
-                if e.Rune == 'q' || e.Key == acell.KeyCtrlC {
-                    return
-                }
-            case *acell.MouseEvent:
-                if e.Action == acell.MousePress {
-                    term.Buf[e.Pos.Y][e.Pos.X] = acell.Cell{Char: 'X'}
-                    term.Flush()
-                }
-            case *acell.ResizeEvent:
-                term.Buf = acell.NewBuf(e.Width, e.Height)
-                t.Invalidate()
-                term.Flush()
-            }
-        case <-ticker.C:
-            // перерисовка ...
-            term.Flush()
-        }
-    }
+	for ev := range t.Events() {
+		switch e := ev.(type) {
+		case *acell.KeyboardEvent:
+			if e.Rune == 'q' || e.Key == acell.KeyCtrlC {
+				return
+			}
+		case *acell.ResizeEvent:
+			t.Buf = acell.NewBuf(e.Width, e.Height)
+			t.Invalidate()
+			draw()
+		}
+	}
 }
+
+
 ```
 
 ## Как это работает
@@ -85,15 +76,12 @@ func main() {
 ## Производительность
 
 [Стресс-бенчмарк](https://github.com/romanSPB15/acell/blob/main/bench) — терминал 120×30, виджет 80×24, 300 изменяющихся клеток
-на кадр, 8-цветов, Windows 10 x64, Windows Terminal, с I/O:
+на кадр, 8-цветов, Windows 10 x64, Windows Terminal, с учётом I/O:
 
-| Реализация                            | Raw     | С виджетами         |
-|---------------------------------------|---------|---------------------|
-| **acell**                             | ~5000   | —                   |
-| **tui-compose v4** (acell + виджеты)  | —       | ~2300               |
-| raw tcell v3                          | ~2450   | —                   |
-| metaspartan/gotui (tcell + виджеты)   | —       | ~1100               |
-
+| Реализация                            | Raw     |
+|---------------------------------------|---------|
+| **acell**                             | ~5000   |
+| tcell v3.5.0                          | ~2450   |
 
 ## Пакеты
 
@@ -106,8 +94,8 @@ func main() {
 
 ## Покрытие тестами
 
-- Ядро: **97.4%**
-- С учётом терминального слоя: 61.4%
+- Ядро: **97.1%**
+- С учётом терминального слоя: 74.8%
 
 ```
 ./calc-coverage.ps1          # полное покрытие, включая term

@@ -1,9 +1,41 @@
+// Package acell — TUI-движок с diff-рендером на уровне ячеек.
+//
+// Основная идея — работать не со строками, а с буфером Cell.
+// Пользователь пишет в Terminal.Buf, вызывает Flush, и движок
+// сам вычисляет разницу с предыдущим кадром и пишет в терминал
+// только изменившиеся ячейки.
+//
+// # Базовый пример
+//
+//	in, out := acell.Default()
+//	t := acell.New(in, out)
+//	defer t.Close()
+//
+//	t.Buf[0][0] = acell.Cell{Char: 'H', Style: acell.Style{Fg: acell.FgOrange}}
+//	t.DrawString(1, 0, acell.Style{}, "ello")
+//	t.Flush()
+//
+//	for ev := range t.Events() {
+//		if k, ok := ev.(*acell.KeyboardEvent); ok && k.Rune == 'q' {
+//			return
+//		}
+//	}
+//
+// # Возможности терминала
+//
+// Возможности определяются автоматически через terminfo.Detect().
+// Явный Info можно передать через NewWithInfo.
+//
+// # Цвета
+//
+// Поддерживаются 16-цветная, 256-цветная и True Color палитры.
+// На терминалах с меньшей глубиной цвета движок автоматически
+// понижает цвет (True Color → 256 → 16 → 8).
 package acell
 
 import (
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"unicode"
@@ -45,17 +77,7 @@ func Default() (io.Reader, io.Writer) {
 	return os.Stdin, os.Stdout
 }
 
-// New создаёт Terminal и переводит терминал в raw-режим,
-// а также включает ENABLE_VIRTUAL_TERMINAL_PROCESSING для ANSI на Windows.
-func New(in io.Reader, out io.Writer) *Terminal {
-	return NewWithTerm(term.NewRawTerminal(in, out))
-}
-
-// NewWithTerm создаёт Terminal на основе переданного RawTerminal.
-// Возможности терминала берутся из t.Info().
-func NewWithTerm(t term.RawTerminal) *Terminal {
-	info := t.Info()
-
+func newTerminal(t term.RawTerminal, info terminfo.Info) *Terminal {
 	t.MakeRaw()
 	t.EnableANSI()
 
@@ -66,6 +88,9 @@ func NewWithTerm(t term.RawTerminal) *Terminal {
 	}
 	if info.MouseSGR {
 		start = append(start, "\033[?1006h"...)
+	}
+	if info.WindowFocusEvents {
+		start = append(start, "\033[?1004h"...)
 	}
 	start = append(start, info.Sgr0...)
 	start = append(start, info.Home...)
@@ -83,6 +108,24 @@ func NewWithTerm(t term.RawTerminal) *Terminal {
 		fgCache:   make(map[string]string, 32),
 		bgCache:   make(map[string]string, 32),
 	}
+}
+
+// New создаёт Terminal и переводит терминал в raw-режим,
+// а также включает ENABLE_VIRTUAL_TERMINAL_PROCESSING для ANSI на Windows.
+func New(in io.Reader, out io.Writer) *Terminal {
+	return NewWithTerm(term.NewRawTerminal(in, out))
+}
+
+// NewWithInfo создаёт Terminal с заданным terminfo.Info, переводит терминал
+// в raw-режим и включает ENABLE_VIRTUAL_TERMINAL_PROCESSING для ANSI на Windows.
+func NewWithInfo(in io.Reader, out io.Writer, info terminfo.Info) *Terminal {
+	return newTerminal(term.NewRawTerminal(in, out), info)
+}
+
+// NewWithTerm создаёт Terminal на основе переданного RawTerminal.
+// Возможности терминала берутся из t.Info().
+func NewWithTerm(t term.RawTerminal) *Terminal {
+	return newTerminal(t, t.Info())
 }
 
 // maskStyle снимает атрибуты, которые терминал не поддерживает.
@@ -287,7 +330,7 @@ func (t *Terminal) Events() <-chan any {
 	return t.raw.Events()
 }
 
-// Info получает информацию об терминале из переменных среды.
+// Info получает информацию об терминале.
 func (t *Terminal) Info() terminfo.Info {
 	return t.info
 }
@@ -305,6 +348,9 @@ func (t *Terminal) Close() error {
 		end = append(end, t.info.Sgr0...)
 		end = append(end, t.info.CursorShow...)
 		end = append(end, t.info.AltScreenOff...)
+		if t.info.WindowFocusEvents {
+			end = append(end, "\033[?1004l"...)
+		}
 
 		t.raw.Write(end)
 
@@ -457,6 +503,48 @@ func (t *Terminal) Invalidate() {
 	t.forceRedraw = true
 }
 
+// Clear заполняет буфер пробелами с пустым стилем.
+// Сам экран не трогает — изменения уйдут в терминал при следующем Flush.
+func (t *Terminal) Clear() {
+	for y := range t.Buf {
+		for x := range t.Buf[y] {
+			t.Buf[y][x] = Cell{Char: ' '}
+		}
+	}
+}
+
+// Fill заполняет буфер заданной ячейкой.
+func (t *Terminal) Fill(c Cell) {
+	for y := range t.Buf {
+		for x := range t.Buf[y] {
+			t.Buf[y][x] = c
+		}
+	}
+}
+
+// SetTitle устанавливает заголовок окна терминала (OSC 0).
+// Управляющие символы вырезаются.
+func (t *Terminal) SetTitle(title string) {
+	var bb builder.Builder
+	bb.Grow(len(title) + 8)
+
+	bb.WriteString("\033]0;")
+	for _, r := range title {
+		if r < 0x20 || r == 0x7F {
+			continue
+		}
+		bb.WriteRune(r)
+	}
+	bb.WriteString("\033\\")
+
+	bb.Copy(t.raw)
+}
+
+// Write пишет байты напрямую в терминал, минуя Flush.
+func (t *Terminal) Write(p []byte) (int, error) {
+	return t.raw.Write(p)
+}
+
 // TTY возвращает потоки, пригодные для raw-режима и событий.
 //
 // Если управляющий терминал доступен (CONIN$/CONOUT$ на Windows,
@@ -471,22 +559,5 @@ func (t *Terminal) Invalidate() {
 // при выходе. Ручное закрытие до Terminal.Close() приведёт
 // к зависанию на Windows.
 func TTY() (io.Reader, io.Writer) {
-	if runtime.GOOS == "windows" {
-		in, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
-		if err != nil {
-			return os.Stdin, os.Stdout
-		}
-		out, err := os.OpenFile("CONOUT$", os.O_RDWR, 0)
-		if err != nil {
-			in.Close()
-			return os.Stdin, os.Stdout
-		}
-		return in, out
-	}
-
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err != nil {
-		return os.Stdin, os.Stdout
-	}
-	return tty, tty
+	return term.TTY()
 }

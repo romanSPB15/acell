@@ -254,3 +254,24 @@ func OpenURL(url string) error {
 		return exec.Command("xdg-open", url).Start()
 	}
 }
+
+func TTY() (io.Reader, io.Writer) {
+	if runtime.GOOS == "windows" {
+		in, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
+		if err != nil {
+			return os.Stdin, os.Stdout
+		}
+		out, err := os.OpenFile("CONOUT$", os.O_RDWR, 0)
+		if err != nil {
+			in.Close()
+			return os.Stdin, os.Stdout
+		}
+		return in, out
+	}
+
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return os.Stdin, os.Stdout
+	}
+	return tty, tty
+}

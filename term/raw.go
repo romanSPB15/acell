@@ -165,6 +165,10 @@ func (rt *rawTerminal) inputLoop(inputCh <-chan []byte) {
 }
 
 func (rt *rawTerminal) dispatch(data []byte) {
+	if ev := parseFocusEvent(data); ev != nil {
+		rt.emit(ev)
+		return
+	}
 	if ev := parseMouseEvent(data); ev != nil {
 		rt.emit(ev)
 		return

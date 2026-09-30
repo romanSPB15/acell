@@ -19,31 +19,137 @@ func TestDefault(t *testing.T) {
 	}
 }
 
-func TestNewWithTerm(t *testing.T) {
-	tr := newFakeRawTerminal()
-	NewWithTerm(tr)
+func TestNewWithInfo(t *testing.T) {
+	t.Run("uses passed info, not detected", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.Name = "custom"
+		info.AltScreenOn = ""
+		info.MouseAny = false
+		info.MouseSGR = false
+		info.WindowFocusEvents = false
+		info.CursorHide = ""
+		info.Sgr0 = ""
+		info.Home = ""
+		info.CursorHide = ""
 
-	if !tr.Raw() {
-		t.Fatal("terminal is not raw")
-	}
-	if !tr.ANSIEnabled() {
-		t.Fatal("ansi is not enabled")
-	}
-	if !tr.InputStarted() {
-		t.Fatal("input is not started")
-	}
+		term := newTerminal(tr, info)
+		defer term.Close()
 
-	out := tr.WrittenString()
-	for _, want := range []string{
-		"\033[?1049h", // alt-screen on
-		"\033[?1003h", // mouse any
-		"\033[?1006h", // mouse sgr
-		"\033[H",      // home
-		"\033[?25l",   // cursor hide
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("start: expected %q in %q", want, out)
+		if term.Info().Name != "custom" {
+			t.Errorf("Info().Name = %q", term.Info().Name)
 		}
+		if got := tr.WrittenString(); got != "" {
+			t.Errorf("expected empty start sequence, got %q", got)
+		}
+	})
+
+	t.Run("start sequence follows info", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.WindowFocusEvents = false
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		out := tr.WrittenString()
+		for _, want := range []string{
+			"\033[?1049h",
+			"\033[?1003h",
+			"\033[?1006h",
+			"\033[H",
+			"\033[?25l",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("expected %q in %q", want, out)
+			}
+		}
+		if strings.Contains(out, "\033[?1004h") {
+			t.Errorf("focus events must be off: %q", out)
+		}
+	})
+
+	t.Run("no cursor hide if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.CursorHide = ""
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		if strings.Contains(tr.WrittenString(), "\033[?25l") {
+			t.Errorf("unexpected cursor-hide")
+		}
+	})
+
+	t.Run("no mouse if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.MouseAny = false
+		info.MouseSGR = false
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		out := tr.WrittenString()
+		if strings.Contains(out, "\033[?1003h") || strings.Contains(out, "\033[?1006h") {
+			t.Errorf("unexpected mouse enable: %q", out)
+		}
+	})
+
+	t.Run("no alt screen if unsupported", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.AltScreenOn = ""
+		info.AltScreenOff = ""
+
+		term := newTerminal(tr, info)
+		defer term.Close()
+
+		if strings.Contains(tr.WrittenString(), "\033[?1049h") {
+			t.Errorf("unexpected alt-screen")
+		}
+	})
+
+	t.Run("Close mirrors Info", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		info := terminfo.Default()
+		info.CursorShow = ""
+		info.AltScreenOff = ""
+		info.WindowFocusEvents = false
+
+		term := newTerminal(tr, info)
+		tr.ResetWritten()
+
+		if err := term.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		out := tr.WrittenString()
+		if strings.Contains(out, "\033[?25h") || strings.Contains(out, "\033[?1049l") {
+			t.Errorf("unexpected restore sequences: %q", out)
+		}
+		if strings.Contains(out, "\033[?1004l") {
+			t.Errorf("unexpected focus-off: %q", out)
+		}
+	})
+}
+
+func TestNewWithTermUsesInfoFromTerm(t *testing.T) {
+	tr := newFakeRawTerminal()
+	info := terminfo.Default()
+	info.Name = "from-term"
+	info.CursorHide = ""
+	tr.SetInfo(info)
+
+	term := NewWithTerm(tr)
+	defer term.Close()
+
+	if term.Info().Name != "from-term" {
+		t.Errorf("Info().Name = %q", term.Info().Name)
+	}
+	if strings.Contains(tr.WrittenString(), "\033[?25l") {
+		t.Errorf("NewWithTerm must honor t.Info()")
 	}
 }
 
@@ -1001,4 +1107,180 @@ func TestCloseError(t *testing.T) {
 	if err := term.Close(); !errors.Is(err, want) {
 		t.Errorf("got %v, want %v", err, want)
 	}
+}
+
+func TestClearAndFill(t *testing.T) {
+	raw := newFakeRawTerminal()
+	term := NewWithTerm(raw)
+	term.Clear()
+
+	for y, v2 := range term.Buf {
+		for x, v := range v2 {
+			if v != (Cell{Char: ' '}) {
+				t.Fatalf("invalid cell at [%d, %d]: expected empty, but got: %v", x, y, v)
+			}
+		}
+	}
+
+	c := Cell{Char: '#', Style: Style{Fg: FgDarkCyan}}
+
+	term.Fill(c)
+
+	for y, v2 := range term.Buf {
+		for x, v := range v2 {
+			if v != c {
+				t.Fatalf("invalid cell at [%d, %d]: expected %v, but got: %v", x, y, c, v)
+			}
+		}
+	}
+}
+
+func TestSetTitle(t *testing.T) {
+	t.Run("simple", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("hello")
+
+		want := "\033]0;hello\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("empty title", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("")
+
+		want := "\033]0;\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("strips control characters", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		// \033 и \007 могли бы вырваться из OSC, \n обрывает title
+		// на части терминалов. Все должны быть вырезаны.
+		term.SetTitle("evil\033[2J\007title\nnewline\ttab")
+
+		want := "\033]0;evil[2Jtitlenewlinetab\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("keeps unicode", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("привет 🚀 你好")
+
+		want := "\033]0;привет 🚀 你好\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("strips DEL", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.SetTitle("a\x7Fb")
+
+		want := "\033]0;ab\033\\"
+		if got := tr.WrittenString(); got != want {
+			t.Fatalf("want %q, got %q", want, got)
+		}
+	})
+
+	t.Run("does not touch buffer", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		term.Buf[0][0] = Cell{Char: 'A'}
+		tr.ResetWritten()
+
+		term.SetTitle("hello")
+		term.Flush()
+
+		out := tr.WrittenString()
+		if !strings.Contains(out, "A") {
+			t.Errorf("flush after SetTitle lost buffer content: %q", out)
+		}
+	})
+}
+
+func TestWrite(t *testing.T) {
+	t.Run("writes bytes directly", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write([]byte("hello"))
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if n != 5 {
+			t.Fatalf("n = %d, want 5", n)
+		}
+		if got := tr.WrittenString(); got != "hello" {
+			t.Fatalf("want %q, got %q", "hello", got)
+		}
+	})
+
+	t.Run("returns writer error", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		want := errors.New("write failed")
+		tr.SetWriteErr(want)
+
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write([]byte("hello"))
+		if !errors.Is(err, want) {
+			t.Fatalf("err = %v, want %v", err, want)
+		}
+		if n != 0 {
+			t.Fatalf("n = %d, want 0", n)
+		}
+	})
+
+	t.Run("multiple writes append", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		term.Write([]byte("foo"))
+		term.Write([]byte("bar"))
+
+		if got := tr.WrittenString(); got != "foobar" {
+			t.Fatalf("want %q, got %q", "foobar", got)
+		}
+	})
+
+	t.Run("empty write", func(t *testing.T) {
+		tr := newFakeRawTerminal()
+		term := NewWithTerm(tr)
+		tr.ResetWritten()
+
+		n, err := term.Write(nil)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if n != 0 {
+			t.Fatalf("n = %d, want 0", n)
+		}
+		if got := tr.WrittenString(); got != "" {
+			t.Fatalf("expected no output, got %q", got)
+		}
+	})
 }
