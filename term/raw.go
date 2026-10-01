@@ -131,7 +131,7 @@ func (rt *rawTerminal) EnableANSI() error {
 
 // Events возвращает канал событий: *KeyboardEvent, *MouseEvent,
 // *ResizeEvent, *WindowFocusEvent.
-// Канал буферизован; при переполнении события отбрасываются.
+// Канал буферизован.
 func (rt *rawTerminal) Events() <-chan any {
 	return rt.events
 }
@@ -190,8 +190,6 @@ func (rt *rawTerminal) readLoop() {
 		case <-rt.stopCh:
 			return
 		case rt.inputCh <- data:
-		default:
-			// Канал полон — дропаем, чтобы не блокировать чтение.
 		}
 	}
 }

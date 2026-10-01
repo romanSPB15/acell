@@ -100,10 +100,10 @@ per frame, 8 colors, Windows 10 x64, Windows Terminal, including I/O:
 - Core: **97.1%**
 - Including the terminal layer: 82.0%
 
-`
+```
 ./calc-coverage.ps1          # full coverage, including term
 ./calc-coverage-noterm.ps1   # core only
-`
+```
 
 ## License
 
