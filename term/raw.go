@@ -198,6 +198,8 @@ func (rt *rawTerminal) readLoop() {
 
 // inputLoop читает из rt.inputCh и разбирает на события.
 func (rt *rawTerminal) inputLoop() {
+	var pending []byte
+
 	for {
 		select {
 		case <-rt.stopCh:
@@ -206,14 +208,19 @@ func (rt *rawTerminal) inputLoop() {
 			if !ok {
 				return
 			}
-			rt.dispatch(data)
-		}
-	}
-}
+			pending = append(pending, data...)
 
-func (rt *rawTerminal) dispatch(data []byte) {
-	if ev := input.Parse(data); ev != nil {
-		rt.emit(ev)
+			for len(pending) > 0 {
+				ev, n := input.ParseOne(pending)
+				if n == 0 {
+					break
+				}
+				pending = pending[n:]
+				if ev != nil {
+					rt.emit(ev)
+				}
+			}
+		}
 	}
 }
 
@@ -221,8 +228,6 @@ func (rt *rawTerminal) emit(ev any) {
 	select {
 	case <-rt.stopCh:
 	case rt.events <- ev:
-	default:
-		// Канал событий полон — дропаем, чтобы не блокировать.
 	}
 }
 

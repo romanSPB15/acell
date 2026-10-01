@@ -1,9 +1,14 @@
 {
    "total_lines": 7931,
-   "code_lines": 6649,
-   "comment_lines": 303,
+   "code_lines": 5752,
+   "comment_lines": 294,
    "empty_lines": 979,
    "test_lines": 3498,
+   "examples_lines": 1037,
+   "examples_code_lines": 897,
+   "examples_comment_lines": 9,
+   "examples_test_lines": 0,
+   "examples_files_count": 6,
    "files_count": 40,
    "test_files_count": 10
 }

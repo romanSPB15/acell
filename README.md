@@ -6,6 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-green)](./calc-coverage-noterm.ps1)
 [![Test](https://github.com/romanSPB15/acell/actions/workflows/test.yaml/badge.svg)](https://github.com/romanSPB15/acell/actions/workflows/test.yaml)
+[![Examples](https://img.shields.io/badge/View-examples-white?logo=github)](https://github.com/romanSPB15/acell/tree/main/examples)
 
 
 [Russian version](README.ru.md)
