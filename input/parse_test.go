@@ -194,3 +194,70 @@ func TestParseFocus(t *testing.T) {
 		})
 	}
 }
+
+func TestParseOne(t *testing.T) {
+	tests := []struct {
+		name       string
+		data       []byte
+		wantEvType string
+		wantN      int
+	}{
+		{"empty", []byte{}, "", 0},
+
+		{"focus in", []byte("\x1b[I"), "focus", 3},
+		{"focus out", []byte("\x1b[O"), "focus", 3},
+
+		{"mouse press", []byte("\x1b[<0;10;20M"), "mouse", 11},
+		{"mouse release", []byte("\x1b[<0;10;20m"), "mouse", 11},
+		{"mouse incomplete", []byte("\x1b[<0;10;20"), "", 0},
+		{"mouse invalid body", []byte("\x1b[<a;10;20M"), "", 11},
+
+		{"esc alone", []byte{27}, "", 0},
+
+		{"arrow up", []byte("\x1b[A"), "keyboard", 3},
+		{"f1", []byte("\x1bOP"), "keyboard", 3},
+		{"csi incomplete", []byte("\x1b["), "", 0},
+		{"csi invalid", []byte("\x1b[\x01A"), "keyboard", 4},
+
+		{"ss3 incomplete", []byte("\x1bO"), "", 0},
+		{"ss3 f1", []byte("\x1bOP"), "keyboard", 3},
+		{"ss3 invalid", []byte("\x1bOz"), "keyboard", 3},
+
+		{"alt+a", []byte{27, 'a'}, "keyboard", 2},
+		{"alt+enter", []byte{27, 13}, "keyboard", 2},
+
+		{"ascii a", []byte{'a'}, "keyboard", 1},
+		{"ascii 0", []byte{0}, "", 1},
+
+		{"utf8 2byte", []byte("é"), "keyboard", 2},
+		{"utf8 3byte", []byte("€"), "keyboard", 3},
+		{"utf8 4byte", []byte("😀"), "keyboard", 4},
+		{"utf8 2byte incomplete", []byte{0xC3}, "", 0},
+		{"utf8 3byte incomplete", []byte{0xE2, 0x82}, "", 0},
+		{"utf8 4byte incomplete", []byte{0xF0, 0x9F, 0x98}, "", 0},
+		{"utf8 invalid lead", []byte{0xFF}, "", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ev, n := ParseOne(tt.data)
+			if n != tt.wantN {
+				t.Errorf("n = %d, want %d", n, tt.wantN)
+			}
+			gotType := ""
+			switch ev.(type) {
+			case *WindowFocusEvent:
+				gotType = "focus"
+			case *MouseEvent:
+				gotType = "mouse"
+			case *KeyboardEvent:
+				gotType = "keyboard"
+			case nil:
+				gotType = ""
+			}
+			if gotType != tt.wantEvType {
+				t.Errorf("event = %s, want %s", gotType, tt.wantEvType)
+			}
+		})
+	}
+}

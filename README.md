@@ -97,8 +97,8 @@ per frame, 8 colors, Windows 10 x64, Windows Terminal, including I/O:
 
 ## Test coverage
 
-- Core: **97.1%**
-- Including the terminal layer: 82.0%
+- Core: **97.0%**
+- Including the terminal layer: 81.8%
 
 ```
 ./calc-coverage.ps1          # full coverage, including term
