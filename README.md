@@ -88,12 +88,14 @@ per frame, 8 colors, Windows 10 x64, Windows Terminal, including I/O:
 
 ## Packages
 
-| Package   | Purpose                                          |
-|-----------|--------------------------------------------------|
-| `acell`   | `Terminal`, `Cell`, `Style`, diff rendering      |
-| `ansi`    | ANSI escape sequence parsing: `Strip`, `Find`    |
-| `builder` | A `strings.Builder` analogue with an extended API|
-| `term`    | `RawTerminal` and terminal handling              |
+| Package   | Purpose                                                    |
+|-----------|------------------------------------------------------------|
+| `acell`   | `Terminal`, `Cell`, `Style`, diff rendering                |
+| `ansi`    | ANSI escape sequence parsing: `Strip`, `Find`              |
+| `builder` | A `strings.Builder` analogue with an extended API          |
+| `term`    | `RawTerminal` and terminal handling                        |
+| `input`   | Mouse and keyboard parser                                  |
+| `terminfo`| Extracting terminal information from environment variables |
 
 ## Test coverage
 
