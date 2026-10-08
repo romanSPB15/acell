@@ -1,15 +1,11 @@
 package main
 
 import (
-	"math"
-	"time"
-	"unicode/utf8"
-
 	"github.com/romanSPB15/acell"
 	"github.com/romanSPB15/acell/builder"
 )
 
-const scale = 4
+const scale = 2
 
 var font = map[rune][]string{
 	'a': {
@@ -126,6 +122,35 @@ func toBraille(bm *bitmap) [][]rune {
 
 var gradBuf builder.Builder
 
+func lerpStyle(fromR, fromG, fromB, toR, toG, toB uint8, t float64) acell.Style {
+	r := uint8(float64(fromR) + (float64(toR)-float64(fromR))*t)
+	g := uint8(float64(fromG) + (float64(toG)-float64(fromG))*t)
+	b := uint8(float64(fromB) + (float64(toB)-float64(fromB))*t)
+
+	gradBuf.Reset()
+	gradBuf.Grow(16)
+	gradBuf.WriteString("38;2;")
+	gradBuf.WriteUint(uint(r))
+	gradBuf.WriteByte(';')
+	gradBuf.WriteUint(uint(g))
+	gradBuf.WriteByte(';')
+	gradBuf.WriteUint(uint(b))
+	return acell.Style{Fg: gradBuf.StringCopy()}
+}
+
+// Розовый -> фиолетовый -> синий
+func logoGrad(t float64) acell.Style {
+	if t < 0.5 {
+		return lerpStyle(255, 105, 180, 138, 43, 226, t*2)
+	}
+	return lerpStyle(138, 43, 226, 70, 70, 230, (t-0.5)*2)
+}
+
+var (
+	lineStyle = acell.Style{Fg: "38;2;150;70;220"}         // фиолетовый
+	signStyle = acell.Style{Fg: acell.FgRGB(200, 20, 100)} // розовый
+)
+
 func main() {
 	in, out := acell.Default()
 	t := acell.New(in, out)
@@ -134,8 +159,6 @@ func main() {
 	grid := toBraille(buildWord("acell", scale))
 	bh := len(grid)
 	bw := len(grid[0])
-
-	phase := 0.0
 
 	render := func() {
 		w, h := t.Size()
@@ -149,65 +172,54 @@ func main() {
 			}
 		}
 
-		pad := 3
-		boxW := bw + pad*2
-		boxH := bh + pad*2
-		offX := (w - boxW) / 2
-		offY := (h - boxH) / 2
-
-		grad := func(x, y int) acell.Style {
-			u := float64(x)/float64(boxW) + float64(y)/float64(boxH)*0.5
-			r := uint8(127 + 128*math.Sin(u*6.28+phase))
-			g := uint8(127 + 128*math.Sin(u*6.28+phase+2.09))
-			b := uint8(127 + 128*math.Sin(u*6.28+phase+4.19))
-
-			gradBuf.Reset()
-			gradBuf.Grow(16)
-			gradBuf.WriteString("38;2;")
-			gradBuf.WriteUint(uint(r))
-			gradBuf.WriteByte(';')
-			gradBuf.WriteUint(uint(g))
-			gradBuf.WriteByte(';')
-			gradBuf.WriteUint(uint(b))
-			return acell.Style{Fg: gradBuf.StringCopy()}
-		}
-
 		put := func(x, y int, ch rune, st acell.Style) {
-			px, py := offX+x, offY+y
-			if py < 0 || py >= h || px < 0 || px >= w {
+			if y < 0 || y >= h || x < 0 || x >= w {
 				return
 			}
-			t.Buf[py][px] = acell.Cell{Char: ch, Style: st}
+			t.Buf[y][x] = acell.Cell{Char: ch, Style: st}
 		}
 
-		put(0, 0, '┌', grad(0, 0))
-		put(boxW-1, 0, '┐', grad(boxW-1, 0))
-		put(0, boxH-1, '└', grad(0, boxH-1))
-		put(boxW-1, boxH-1, '┘', grad(boxW-1, boxH-1))
+		const lineThick = 2
+		const sigRow = 1
+		blockH := 2*lineThick + sigRow + bh
+		offY := (h - blockH) / 2
+		offX := (w - bw) / 2
 
-		for x := 1; x < boxW-1; x++ {
-			put(x, 0, '─', grad(x, 0))
-			put(x, boxH-1, '─', grad(x, boxH-1))
-		}
-		for y := 1; y < boxH-1; y++ {
-			put(0, y, '│', grad(0, y))
-			put(boxW-1, y, '│', grad(boxW-1, y))
+		// Верхняя линия
+		for i := 0; i < lineThick; i++ {
+			for x := 0; x < bw; x++ {
+				put(offX+x, offY+i, '╱', lineStyle)
+			}
 		}
 
+		// Подпись в щели между линией и логотипом, слева
+		sign := "romanSPB15"
+		signY := offY + lineThick
+		for i, r := range sign {
+			put(offX+i, signY, r, signStyle)
+		}
+
+		// Логотип
+		logoY := offY + lineThick + sigRow
 		for y := 0; y < bh; y++ {
 			for x := 0; x < bw; x++ {
 				if grid[y][x] == 0x2800 {
 					continue
 				}
-				put(pad+x, pad+y, grid[y][x], grad(pad+x, pad+y))
+				tpos := 0.0
+				if bw > 1 {
+					tpos = float64(x) / float64(bw-1)
+				}
+				put(offX+x, logoY+y, grid[y][x], logoGrad(tpos))
 			}
 		}
 
-		label := "Fast TUI engine by romanSPB15"
-		labelY := offY + boxH - 1
-		labelX := (w - utf8.RuneCountInString(label)) / 2
-		for i, r := range label {
-			put(labelX+i-offX, labelY-offY, r, acell.Style{Args: acell.Bold})
+		// Нижняя линия
+		botY := logoY + bh
+		for i := 0; i < lineThick; i++ {
+			for x := 0; x < bw; x++ {
+				put(offX+x, botY+i, '╱', lineStyle)
+			}
 		}
 
 		t.Flush()
@@ -215,24 +227,15 @@ func main() {
 
 	render()
 
-	ticker := time.NewTicker(time.Second / 30)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case ev := <-t.Events():
-			switch e := ev.(type) {
-			case *acell.KeyboardEvent:
-				if e.Key == acell.KeyCtrlC || e.Rune == 'q' || e.Key == acell.KeyEsc {
-					return
-				}
-			case *acell.ResizeEvent:
-				t.Buf = acell.NewBuf(e.Width, e.Height)
-				t.Invalidate()
-				render()
+	for ev := range t.Events() {
+		switch e := ev.(type) {
+		case *acell.KeyboardEvent:
+			if e.Key == acell.KeyCtrlC || e.Rune == 'q' || e.Key == acell.KeyEsc {
+				return
 			}
-		case <-ticker.C:
-			phase += 0.2
+		case *acell.ResizeEvent:
+			t.Buf = acell.NewBuf(e.Width, e.Height)
+			t.Invalidate()
 			render()
 		}
 	}

@@ -34,6 +34,8 @@
 package acell
 
 import (
+	"bytes"
+	"image"
 	"io"
 	"os"
 	"strings"
@@ -44,6 +46,18 @@ import (
 	"github.com/romanSPB15/acell/term"
 	"github.com/romanSPB15/acell/terminfo"
 )
+
+type Image struct {
+	data          []byte
+	Pos           Point
+	Width, Height int
+}
+
+func ParseImage(img image.Image, pos Point, w, h int) Image {
+	return Image{
+		data: encodeSixel(img, w, h, 8, 16),
+	}
+}
 
 type pos struct {
 	Line int
@@ -70,6 +84,9 @@ type Terminal struct {
 	closeErr  error
 
 	forceRedraw bool
+
+	Images  []Image
+	lastImg []Image
 }
 
 // Default возвращает стандартные потоки ввода-вывода.
@@ -311,6 +328,30 @@ func (t *Terminal) Flush() {
 			}
 		}
 	}
+	n := len(t.Images)
+	if len(t.lastImg) < n {
+		n = len(t.lastImg)
+	}
+
+	for i := 0; i < n; i++ {
+		cur := &t.Images[i]
+		old := &t.lastImg[i]
+		if cur.Pos == old.Pos &&
+			cur.Width == old.Width &&
+			cur.Height == old.Height &&
+			bytes.Equal(cur.data, old.data) {
+			continue
+		}
+		t.emitImage(bb, cur)
+		changed = true
+	}
+
+	for i := n; i < len(t.Images); i++ {
+		t.emitImage(bb, &t.Images[i])
+		changed = true
+	}
+
+	t.lastImg = append(t.lastImg[:0], t.Images...)
 
 	if changed {
 		if t.info.SynchronizedUpdate {
@@ -318,6 +359,18 @@ func (t *Terminal) Flush() {
 		}
 		t.bb.Copy(t.raw)
 	}
+}
+
+func (t *Terminal) emitImage(bb *builder.Builder, im *Image) {
+	bb.WriteString("\033[")
+	bb.WriteInt(im.Pos.Y + 1) // Line
+	bb.WriteByte(';')
+	bb.WriteInt(im.Pos.X + 1) // Col
+	bb.WriteByte('H')
+	bb.Write(im.data)
+
+	t.cursorPos = pos{-1, -1}
+	t.last = Style{}
 }
 
 // Size возвращает размер терминала.

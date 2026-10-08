@@ -68,6 +68,10 @@ type Info struct {
 
 	SynchronizedUpdate bool
 	WindowFocusEvents  bool
+
+	Sixel bool
+	CellW int
+	CellH int
 }
 
 var All = Info{

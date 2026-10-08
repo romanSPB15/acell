@@ -2,6 +2,8 @@ package acell
 
 import "github.com/romanSPB15/acell/builder"
 
+// Foreground-цвета, 16-цветная палитра ANSI.
+// Обычные (30–37) и яркие (90–97) варианты.
 const (
 	Fg16Black   = "30"
 	Fg16Red     = "31"
@@ -29,6 +31,8 @@ const (
 	Fg16BrightGreen = Fg16LightGreen
 )
 
+// Background-цвета, 16-цветная палитра ANSI.
+// Обычные (40–47) и яркие (100–107) варианты.
 const (
 	Bg16Black   = "40"
 	Bg16Red     = "41"
@@ -56,6 +60,9 @@ const (
 	Bg16BrightGreen = Bg16LightGreen
 )
 
+// Оттенки серого, 256-цветная палитра ANSI.
+// Индексы 232–255. Формат "38;5;N".
+// Шаг между соседними оттенками — 10 по каждому каналу RGB.
 const (
 	FgGrey1  = "38;5;232" // rgb(8,8,8)
 	FgGrey2  = "38;5;233" // rgb(18,18,18)
@@ -83,6 +90,9 @@ const (
 	FgGrey24 = "38;5;255" // rgb(238,238,238)
 )
 
+// Оттенки серого, 256-цветная палитра ANSI.
+// Индексы 232–255. Формат "48;5;N".
+// Шаг между соседними оттенками — 10 по каждому каналу RGB.
 const (
 	BgGrey1  = "48;5;232" // rgb(8,8,8)
 	BgGrey2  = "48;5;233" // rgb(18,18,18)
@@ -110,6 +120,7 @@ const (
 	BgGrey24 = "48;5;255" // rgb(238,238,238)
 )
 
+// Foreground-цвета 256-цветной палитры ANSI.
 const (
 	FgBlack = "38;5;16"  // rgb(0,0,0)
 	FgWhite = "38;5;231" // rgb(255,255,255)
@@ -128,33 +139,33 @@ const (
 	FgLightBlue   = "38;5;153" // rgb(175,215,255)
 	FgLightSteel  = "38;5;152" // rgb(175,215,215)
 
-	FgTeal       = "38;5;30" // rgb(0,135,135)
-	FgDarkCyan   = FgTeal
-	FgCyan       = "38;5;51" // rgb(0,255,255)
-	FgAqua       = FgCyan
-	FgLightSea   = "38;5;37" // rgb(0,175,175)
-	FgTurquoise  = "38;5;44" // rgb(0,215,215)
-	FgSteelBlue  = "38;5;67" // rgb(95,135,175)
-	FgCadetBlue  = "38;5;66" // rgb(95,135,135)
-	FgPowderBlue = FgLightSteel
-	FgPaleCyan   = "38;5;195" // rgb(215,255,255)
+	FgTeal       = "38;5;30"    // rgb(0,135,135)
+	FgDarkCyan   = FgTeal       // алиас FgTeal
+	FgCyan       = "38;5;51"    // rgb(0,255,255)
+	FgAqua       = FgCyan       // алиас FgCyan
+	FgLightSea   = "38;5;37"    // rgb(0,175,175)
+	FgTurquoise  = "38;5;44"    // rgb(0,215,215)
+	FgSteelBlue  = "38;5;67"    // rgb(95,135,175)
+	FgCadetBlue  = "38;5;66"    // rgb(95,135,135)
+	FgPowderBlue = FgLightSteel // алиас FgLightSteel
+	FgPaleCyan   = "38;5;195"   // rgb(215,255,255)
 
-	FgDarkGreen    = "38;5;22" // rgb(0,95,0)
-	FgForestGreen  = "38;5;28" // rgb(0,135,0)
-	FgGreen        = "38;5;46" // rgb(0,255,0)
-	FgLime         = FgGreen
-	FgSpringGreen  = "38;5;47"  // rgb(0,255,95)
-	FgMediumSpring = "38;5;48"  // rgb(0,255,135)
-	FgGreenYellow  = "38;5;118" // rgb(135,255,0)
-	FgChartreuse   = FgGreenYellow
-	FgLightGreen   = "38;5;120" // rgb(135,255,135)
-	FgPaleGreen    = "38;5;121" // rgb(135,255,175)
-	FgSeaGreen     = "38;5;29"  // rgb(0,135,95)
-	FgMediumSea    = "38;5;35"  // rgb(0,175,95)
-	FgLimeGreen    = "38;5;40"  // rgb(0,215,0)
+	FgDarkGreen    = "38;5;22"     // rgb(0,95,0)
+	FgForestGreen  = "38;5;28"     // rgb(0,135,0)
+	FgGreen        = "38;5;46"     // rgb(0,255,0)
+	FgLime         = FgGreen       // алиас FgGreen
+	FgSpringGreen  = "38;5;47"     // rgb(0,255,95)
+	FgMediumSpring = "38;5;48"     // rgb(0,255,135)
+	FgGreenYellow  = "38;5;118"    // rgb(135,255,0)
+	FgChartreuse   = FgGreenYellow // алиас FgGreenYellow
+	FgLightGreen   = "38;5;120"    // rgb(135,255,135)
+	FgPaleGreen    = "38;5;121"    // rgb(135,255,175)
+	FgSeaGreen     = "38;5;29"     // rgb(0,135,95)
+	FgMediumSea    = "38;5;35"     // rgb(0,175,95)
+	FgLimeGreen    = "38;5;40"     // rgb(0,215,0)
 
-	FgOliveDrab = "38;5;100" // rgb(135,135,0)
-	FgOlive     = "38;5;100" // rgb(135,135,0)
+	FgOliveDrab = "38;5;100"  // rgb(135,135,0)
+	FgOlive     = FgOliveDrab // алиас FgOliveDrab
 
 	FgDarkKhaki     = "38;5;143" // rgb(175,175,95)
 	FgKhaki         = "38;5;222" // rgb(255,215,135)
@@ -187,11 +198,11 @@ const (
 	FgPink      = "38;5;212" // rgb(255,135,215)
 	FgLightPink = "38;5;217" // rgb(255,175,175)
 
-	FgIndigo       = "38;5;54" // rgb(95,0,135)
-	FgBlueViolet   = "38;5;56" // rgb(95,0,215)
-	FgPurple       = "38;5;90" // rgb(135,0,135)
-	FgDarkViolet   = "38;5;91" // rgb(135,0,175)
-	FgDarkMagenta  = FgPurple
+	FgIndigo       = "38;5;54"  // rgb(95,0,135)
+	FgBlueViolet   = "38;5;56"  // rgb(95,0,215)
+	FgPurple       = "38;5;90"  // rgb(135,0,135)
+	FgDarkViolet   = "38;5;91"  // rgb(135,0,175)
+	FgDarkMagenta  = FgPurple   // алиас FgPurple
 	FgDarkOrchid   = "38;5;128" // rgb(175,0,215)
 	FgMediumOrchid = "38;5;134" // rgb(175,95,215)
 	FgMediumPurple = "38;5;141" // rgb(175,135,255)
@@ -200,9 +211,10 @@ const (
 	FgThistle      = "38;5;225" // rgb(255,215,255)
 	FgOrchid       = "38;5;213" // rgb(255,135,255)
 	FgMagenta      = "38;5;201" // rgb(255,0,255)
-	FgFuchsia      = FgMagenta
+	FgFuchsia      = FgMagenta  // алиас FgMagenta
 )
 
+// Background-цвета 256-цветной палитры ANSI.
 const (
 	BgBlack = "48;5;16"  // rgb(0,0,0)
 	BgWhite = "48;5;231" // rgb(255,255,255)
@@ -221,33 +233,33 @@ const (
 	BgLightBlue   = "48;5;153" // rgb(175,215,255)
 	BgLightSteel  = "48;5;152" // rgb(175,215,215)
 
-	BgTeal       = "48;5;30" // rgb(0,135,135)
-	BgDarkCyan   = BgTeal
-	BgCyan       = "48;5;51" // rgb(0,255,255)
-	BgAqua       = BgCyan
-	BgLightSea   = "48;5;37" // rgb(0,175,175)
-	BgTurquoise  = "48;5;44" // rgb(0,215,215)
-	BgSteelBlue  = "48;5;67" // rgb(95,135,175)
-	BgCadetBlue  = "48;5;66" // rgb(95,135,135)
-	BgPowderBlue = BgLightSteel
-	BgPaleCyan   = "48;5;195" // rgb(215,255,255)
+	BgTeal       = "48;5;30"    // rgb(0,135,135)
+	BgDarkCyan   = BgTeal       // алиас BgTeal
+	BgCyan       = "48;5;51"    // rgb(0,255,255)
+	BgAqua       = BgCyan       // алиас BgCyan
+	BgLightSea   = "48;5;37"    // rgb(0,175,175)
+	BgTurquoise  = "48;5;44"    // rgb(0,215,215)
+	BgSteelBlue  = "48;5;67"    // rgb(95,135,175)
+	BgCadetBlue  = "48;5;66"    // rgb(95,135,135)
+	BgPowderBlue = BgLightSteel // алиас BgLightSteel
+	BgPaleCyan   = "48;5;195"   // rgb(215,255,255)
 
-	BgDarkGreen    = "48;5;22" // rgb(0,95,0)
-	BgForestGreen  = "48;5;28" // rgb(0,135,0)
-	BgGreen        = "48;5;46" // rgb(0,255,0)
-	BgLime         = BgGreen
-	BgSpringGreen  = "48;5;47"  // rgb(0,255,95)
-	BgMediumSpring = "48;5;48"  // rgb(0,255,135)
-	BgGreenYellow  = "48;5;118" // rgb(135,255,0)
-	BgChartreuse   = BgGreenYellow
-	BgLightGreen   = "48;5;120" // rgb(135,255,135)
-	BgPaleGreen    = "48;5;121" // rgb(135,255,175)
-	BgSeaGreen     = "48;5;29"  // rgb(0,135,95)
-	BgMediumSea    = "48;5;35"  // rgb(0,175,95)
-	BgLimeGreen    = "48;5;40"  // rgb(0,215,0)
+	BgDarkGreen    = "48;5;22"     // rgb(0,95,0)
+	BgForestGreen  = "48;5;28"     // rgb(0,135,0)
+	BgGreen        = "48;5;46"     // rgb(0,255,0)
+	BgLime         = BgGreen       // алиас BgGreen
+	BgSpringGreen  = "48;5;47"     // rgb(0,255,95)
+	BgMediumSpring = "48;5;48"     // rgb(0,255,135)
+	BgGreenYellow  = "48;5;118"    // rgb(135,255,0)
+	BgChartreuse   = BgGreenYellow // алиас BgGreenYellow
+	BgLightGreen   = "48;5;120"    // rgb(135,255,135)
+	BgPaleGreen    = "48;5;121"    // rgb(135,255,175)
+	BgSeaGreen     = "48;5;29"     // rgb(0,135,95)
+	BgMediumSea    = "48;5;35"     // rgb(0,175,95)
+	BgLimeGreen    = "48;5;40"     // rgb(0,215,0)
 
-	BgOliveDrab = "48;5;100" // rgb(135,135,0)
-	BgOlive     = "48;5;100" // rgb(135,135,0)
+	BgOliveDrab = "48;5;100"  // rgb(135,135,0)
+	BgOlive     = BgOliveDrab // алиас BgOliveDrab
 
 	BgDarkKhaki     = "48;5;143" // rgb(175,175,95)
 	BgKhaki         = "48;5;222" // rgb(255,215,135)
@@ -280,11 +292,11 @@ const (
 	BgPink      = "48;5;212" // rgb(255,135,215)
 	BgLightPink = "48;5;217" // rgb(255,175,175)
 
-	BgIndigo       = "48;5;54" // rgb(95,0,135)
-	BgBlueViolet   = "48;5;56" // rgb(95,0,215)
-	BgPurple       = "48;5;90" // rgb(135,0,135)
-	BgDarkViolet   = "48;5;91" // rgb(135,0,175)
-	BgDarkMagenta  = BgPurple
+	BgIndigo       = "48;5;54"  // rgb(95,0,135)
+	BgBlueViolet   = "48;5;56"  // rgb(95,0,215)
+	BgPurple       = "48;5;90"  // rgb(135,0,135)
+	BgDarkViolet   = "48;5;91"  // rgb(135,0,175)
+	BgDarkMagenta  = BgPurple   // алиас BgPurple
 	BgDarkOrchid   = "48;5;128" // rgb(175,0,215)
 	BgMediumOrchid = "48;5;134" // rgb(175,95,215)
 	BgMediumPurple = "48;5;141" // rgb(175,135,255)
@@ -293,7 +305,7 @@ const (
 	BgThistle      = "48;5;225" // rgb(255,215,255)
 	BgOrchid       = "48;5;213" // rgb(255,135,255)
 	BgMagenta      = "48;5;201" // rgb(255,0,255)
-	BgFuchsia      = BgMagenta
+	BgFuchsia      = BgMagenta  // алиас BgMagenta
 )
 
 // writeSGR256 пишет SGR-последовательность для 256-цветной палитры.

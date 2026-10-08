@@ -14,13 +14,11 @@ import (
 
 // RawTerminal представляет собой терминал.
 type RawTerminal interface {
-	io.Writer
-	io.Reader
+	io.ReadWriteCloser
 	MakeRaw() error
 	Restore() error
 	EnableANSI() error
 	Events() <-chan any
-	Close() error
 	Size() (int, int)
 	StartInput()
 

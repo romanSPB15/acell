@@ -8,21 +8,18 @@
 [![Test](https://github.com/romanSPB15/acell/actions/workflows/test.yaml/badge.svg)](https://github.com/romanSPB15/acell/actions/workflows/test.yaml)
 [![Examples](https://img.shields.io/badge/View-examples-white?logo=github)](https://github.com/romanSPB15/acell/tree/main/examples)
 
+**Низкоуровневый cell-based терминальный слой для Go.**
 
-[Russian version](README.ru.md)
-
-**A low-level cell-based terminal layer for Go.**
-
-- 🎯 Full mouse support: click, release, motion, wheel (SGR 1006)
-- 🚀 5000 FPS in the benchmark — 2× faster than tcell v3
-- 🎨 Automatic color downsampling — TrueColor → 256 → 16 → 8, matching terminal capabilities
-- 🎁 Windows without WSL, without CGO
-- 📦 Only two dependencies — `x/sys` and `x/term`
-- ✅ 97% test coverage of the core
+- 🎯 Полная поддержка мыши: клик, отпускание, движение, скролл (SGR 1006)
+- 🚀 5000 FPS на бенчмарке — в 2 раза быстрее tcell v3
+- 🎨 Автоматический downsampling цветов — TrueColor → 256 → 16 → 8 под возможности терминала
+- 🎁 Windows без WSL, без CGO
+- 📦 Всего две зависимости — `x/sys` и `x/term`
+- ✅ 97% покрытие ядра тестами
 
 <h3 align="center"><pre>go get github.com/romanSPB15/acell</pre></h3>
 
-## Quick start
+## Быстрый старт
 
 ```go
 package main
@@ -59,54 +56,52 @@ func main() {
 	}
 }
 
-```
-
-## How it works
-
-The rendering model is a `[][]Cell` buffer (`Terminal.Buf`) plus a shadow
-copy (`oldBuf`). Each `Flush`:
-
-1. Walks both buffers cell by cell.
-2. For every changed cell, writes a `CUP` (only if the cursor isn't
-   already there), then the style delta, then the rune.
-3. Caches the previous style and cursor position to avoid emitting
-   redundant sequences.
-4. Wraps the frame in mode 2026 (`CSI ?2026h` … `CSI ?2026l`) for
-   atomic updates.
-
-All output is collected into a reusable `builder.Builder` — no intermediate strings.
-
-## Performance
-
-[Stress benchmark](https://github.com/romanSPB15/acell/blob/main/bench) — 120×30 terminal, 80×24 widget, 300 changing cells
-per frame, 8 colors, Windows 10 x64, Windows Terminal, including I/O:
-
-| Implementation                        | Raw     |
-|---------------------------------------|---------|
-| **acell**                             | ~5000   |
-| tcell v3.5.0                          | ~2450   |
-
-## Packages
-
-| Package   | Purpose                                                    |
-|-----------|------------------------------------------------------------|
-| `acell`   | `Terminal`, `Cell`, `Style`, diff rendering                |
-| `ansi`    | ANSI escape sequence parsing: `Strip`, `Find`              |
-| `builder` | A `strings.Builder` analogue with an extended API          |
-| `term`    | `RawTerminal` and terminal handling                        |
-| `input`   | Mouse and keyboard parser                                  |
-| `terminfo`| Extracting terminal information from environment variables |
-
-## Test coverage
-
-- Core: **97.0%**
-- Including the terminal layer: 81.8%
 
 ```
-./calc-coverage.ps1          # full coverage, including term
-./calc-coverage-noterm.ps1   # core only
+
+## Как это работает
+
+Модель рендера — буфер `[][]Cell` (`Terminal.Buf`) плюс теневая копия
+(`oldBuf`). Каждый `Flush`:
+
+1. Проходит по обоим буферам клетка за клеткой.
+2. Для каждой изменившейся клетки пишет `CUP` (только если курсор ещё
+   не там), затем дельту стиля, затем руну.
+3. Кеширует предыдущий стиль и позицию курсора, чтобы не писать лишние
+   последовательности.
+4. Оборачивает кадр в mode 2026 (`CSI ?2026h` … `CSI ?2026l`) для
+   атомарного обновления.
+
+Весь вывод собирается в переиспользуемый `builder.Builder` — без промежуточных строк.
+
+## Производительность
+
+![FPS](bench/count/bench_fps.png)
+
+![Количество байты](bench/count/bench_bytes.png)
+
+
+## Пакеты
+
+| Пакет     | Назначение                                             |
+|-----------|--------------------------------------------------------|
+| `acell`   | `Terminal`, `Cell`, `Style`, diff-рендер               |
+| `ansi`    | Парсинг ANSI-последовательностей: `Strip`, `Find`      |
+| `builder` | Аналог `strings.Builder` с расширенным API             |
+| `term`    | `RawTerminal` и работа с терминалом                    |
+| `input`   | Парсер мыши и клавиатуры                               |
+| `terminfo`| Извлечение информации об терминале из переменных среды |
+
+## Покрытие тестами
+
+- Ядро: **97.0%**
+- С учётом терминального слоя: 81.8%
+
+```
+./calc-coverage.ps1          # полное покрытие, включая term
+./calc-coverage-noterm.ps1   # только ядро
 ```
 
-## License
+## Лицензия
 
 [MIT](./LICENSE)
