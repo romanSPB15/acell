@@ -1,6 +1,7 @@
 package term
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -17,16 +18,15 @@ type ResizeEvent struct {
 	Height int
 }
 
-// rawTerminal — стандартная реализация RawTerminal.
 type rawTerminal struct {
 	in  io.Reader
 	out io.Writer
 
-	inFile  *os.File // если in удалось привести к *os.File
-	outFile *os.File // если out удалось привести к *os.File
+	inFile  *os.File
+	outFile *os.File
 
 	events  chan any
-	inputCh chan []byte // сюда пишет readLoop, оттуда читает inputLoop
+	inputCh chan []byte
 	stopCh  chan struct{}
 	once    sync.Once
 
@@ -35,10 +35,14 @@ type rawTerminal struct {
 	oldState *term.State
 	oldFile  *os.File
 
-	info terminfo.Info
+	infoMu sync.RWMutex
+	info   terminfo.Info
 }
 
+// Info возвращает текущие характеристики терминала.
 func (t *rawTerminal) Info() terminfo.Info {
+	t.infoMu.RLock()
+	defer t.infoMu.RUnlock()
 	return t.info
 }
 
@@ -75,8 +79,9 @@ func NewRawTerminal(in io.Reader, out io.Writer) RawTerminal {
 	return rt
 }
 
-// StartInput запускает чтение из in и рассылку событий.
+// StartInput запускает чтение из in и запрашивает размер ячейки терминала.
 func (rt *rawTerminal) StartInput() {
+	rt.Write([]byte("\033[16t"))
 	go rt.readLoop()
 	go rt.inputLoop()
 	go rt.resizeLoop()
@@ -88,15 +93,11 @@ func (rt *rawTerminal) Write(p []byte) (int, error) {
 }
 
 // Read реализует io.Reader.
-//
-// Внимание: одновременный вызов Read и работа readLoop могут
-// конфликтовать за одни и те же байты. Обычно Read нужен только
-// для тестов или для интеграции с внешним event loop.
 func (rt *rawTerminal) Read(p []byte) (int, error) {
 	return rt.in.Read(p)
 }
 
-// MakeRaw вводит входной файл в raw-режим.
+// MakeRaw переводит входной файл в raw-режим.
 func (rt *rawTerminal) MakeRaw() error {
 	if rt.inFile == nil {
 		return ErrorNotRaw
@@ -129,9 +130,7 @@ func (rt *rawTerminal) EnableANSI() error {
 	return nil
 }
 
-// Events возвращает канал событий: *KeyboardEvent, *MouseEvent,
-// *ResizeEvent, *WindowFocusEvent.
-// Канал буферизован.
+// Events возвращает канал событий.
 func (rt *rawTerminal) Events() <-chan any {
 	return rt.events
 }
@@ -149,11 +148,6 @@ func (rt *rawTerminal) Close() error {
 	return nil
 }
 
-// readLoop читает байты из rt.in и складывает их в rt.inputCh.
-//
-// Если rt.in реализует SetReadDeadline, чтение прерывается раз в 50мс —
-// это позволяет проверять stopCh на закрытие. Иначе Close повиснет
-// на блокирующем Read.
 func (rt *rawTerminal) readLoop() {
 	buf := make([]byte, 1024)
 
@@ -194,7 +188,6 @@ func (rt *rawTerminal) readLoop() {
 	}
 }
 
-// inputLoop читает из rt.inputCh и разбирает на события.
 func (rt *rawTerminal) inputLoop() {
 	var pending []byte
 
@@ -209,6 +202,10 @@ func (rt *rawTerminal) inputLoop() {
 			pending = append(pending, data...)
 
 			for len(pending) > 0 {
+				if n := rt.tryCellSizeReply(pending); n > 0 {
+					pending = pending[n:]
+					continue
+				}
 				ev, n := input.ParseOne(pending)
 				if n == 0 {
 					break
@@ -220,6 +217,33 @@ func (rt *rawTerminal) inputLoop() {
 			}
 		}
 	}
+}
+
+// tryCellSizeReply разбирает ответ \033[6;H;Wt. Возвращает число
+// потреблённых байт или 0, если это не ответ на запрос размера ячейки.
+func (rt *rawTerminal) tryCellSizeReply(p []byte) int {
+	if len(p) < 4 {
+		return 0
+	}
+	if p[0] != 0x1b || p[1] != '[' || p[2] != '6' || p[3] != ';' {
+		return 0
+	}
+	for i := 4; i < len(p); i++ {
+		if p[i] == 0x1b {
+			return 0
+		}
+		if p[i] == 't' {
+			var h, w int
+			if _, err := fmt.Sscanf(string(p[:i+1]), "\033[6;%d;%dt", &h, &w); err == nil && h > 0 && w > 0 {
+				rt.infoMu.Lock()
+				rt.info.CellH = h
+				rt.info.CellW = w
+				rt.infoMu.Unlock()
+			}
+			return i + 1
+		}
+	}
+	return 0
 }
 
 func (rt *rawTerminal) emit(ev any) {

@@ -102,41 +102,38 @@ var All = Info{
 
 	SynchronizedUpdate: true,
 	WindowFocusEvents:  true,
+	Sixel:              true,
+	CellW:              8,
+	CellH:              16,
 }
 
 func Default() Info {
 	return Info{
-		Name:   "xterm-256color",
-		Colors: Color256,
-
+		Name:         "xterm",
+		Colors:       Color16,
 		CursorHide:   "\033[?25l",
-		CursorShow:   "\033[?12l\033[?25h",
+		CursorShow:   "\033[?25h",
 		AltScreenOn:  "\033[?1049h",
 		AltScreenOff: "\033[?1049l",
-		Clear:        "\033[2J\033[H",
+		Clear:        "\033[2J",
 		Home:         "\033[H",
-
-		Sgr0: "\033(B\033[m",
-		Op:   "\033[39;49m",
-
-		Bold:      true,
-		Dim:       true,
-		Italic:    true,
-		Underline: true,
-		Reverse:   true,
-		Blink:     true,
-		Hidden:    true,
-		Strike:    true,
-
-		MouseAny: true,
-		MouseSGR: true,
-
-		SynchronizedUpdate: true,
-		WindowFocusEvents:  true,
+		Sgr0:         "\033[0m",
+		Op:           "\033[39;49m",
+		Bold:         true,
+		Dim:          true,
+		Italic:       true,
+		Underline:    true,
+		Reverse:      true,
+		Blink:        true,
+		Hidden:       true,
+		Strike:       true,
+		MouseAny:     true,
+		MouseSGR:     true,
+		CellW:        8,
+		CellH:        16,
 	}
 }
 
-// Detect возвращает Info для текущего окружения.
 func Detect() Info {
 	info := Default()
 
@@ -149,48 +146,50 @@ func Detect() Info {
 		info.Name = term
 	}
 
-	// True Color из $COLORTERM
 	if colorTerm == "truecolor" || colorTerm == "24bit" {
 		info.Colors = ColorTrue
 	}
 
-	// VS Code Terminal
 	if termProgram == "vscode" {
 		info.Name = "vscode"
 		info.CursorHide = ""
 		info.CursorShow = ""
 		info.Blink = false
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
 		return info
 	}
 
-	// Windows Terminal
 	if wtSession != "" {
 		info.Name = "windows-terminal"
 		info.Colors = ColorTrue
 		info.SynchronizedUpdate = true
 		info.Blink = false
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
 		return info
 	}
 
-	// mintty (Git Bash)
 	if os.Getenv("MINTTY") != "" ||
 		termProgram == "mintty" ||
 		strings.Contains(term, "mintty") {
 		info.Name = "mintty"
 		info.Colors = ColorTrue
 		info.SynchronizedUpdate = false
-
 		info.Blink = false
 		info.MouseAny = false
 		info.MouseSGR = false
 		info.CursorHide = ""
 		info.CursorShow = ""
 		info.WindowFocusEvents = false
-
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
 		return info
 	}
 
-	// cygwin / msys
 	if strings.HasPrefix(term, "cygwin") || strings.HasPrefix(term, "msys") {
 		info.Name = "cygwin"
 		info.Colors = Color16
@@ -198,10 +197,10 @@ func Detect() Info {
 		info.Italic = false
 		info.Strike = false
 		info.SynchronizedUpdate = false
+		info.Sixel = false
 		return info
 	}
 
-	// Linux-консоль (без X)
 	if term == "linux" {
 		info.Name = "linux"
 		info.Colors = Color8
@@ -214,10 +213,10 @@ func Detect() Info {
 		info.MouseAny = false
 		info.MouseSGR = false
 		info.SynchronizedUpdate = false
+		info.Sixel = false
 		return info
 	}
 
-	// dumb
 	if term == "dumb" {
 		info.Name = "dumb"
 		info.Colors = ColorNone
@@ -239,14 +238,15 @@ func Detect() Info {
 		info.MouseSGR = false
 		info.SynchronizedUpdate = false
 		info.WindowFocusEvents = false
+		info.Sixel = false
 		return info
 	}
 
-	// ConHost (cmd.exe, PowerShell, Windows PowerShell) — не WT, не mintty
 	if term == "" && os.Getenv("OS") == "Windows_NT" {
 		info.Name = "windows-conhost"
 		info.Colors = ColorTrue
 		info.SynchronizedUpdate = false
+		info.Sixel = false
 
 		if windowsBuild() < 22000 {
 			info.Dim = false
@@ -271,6 +271,35 @@ func Detect() Info {
 		case term == "xterm" || term == "screen" || term == "tmux":
 			info.Colors = Color8
 		}
+	}
+
+	switch termProgram {
+	case "iTerm.app":
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
+	case "WezTerm":
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
+	case "ghostty":
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
+	case "kitty":
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
+	}
+
+	if os.Getenv("KITTY_WINDOW_ID") != "" {
+		info.Sixel = true
+		info.CellW = 0
+		info.CellH = 0
+	}
+
+	if strings.Contains(term, "sixel") {
+		info.Sixel = true
 	}
 
 	return info

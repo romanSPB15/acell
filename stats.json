@@ -1,14 +1,14 @@
 {
-   "total_lines": 8625,
-   "code_lines": 6309,
-   "comment_lines": 329,
-   "empty_lines": 1081,
+   "total_lines": 9059,
+   "code_lines": 6566,
+   "comment_lines": 339,
+   "empty_lines": 1143,
    "test_lines": 3565,
-   "examples_lines": 1037,
-   "examples_code_lines": 897,
-   "examples_comment_lines": 9,
+   "examples_lines": 1162,
+   "examples_code_lines": 997,
+   "examples_comment_lines": 14,
    "examples_test_lines": 0,
-   "examples_files_count": 6,
-   "files_count": 41,
+   "examples_files_count": 7,
+   "files_count": 43,
    "test_files_count": 10
 }

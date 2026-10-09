@@ -99,7 +99,7 @@ func main() {
 
 		t.Images = t.Images[:0]
 		t.Images = append(t.Images,
-			acell.ParseImage(img, acell.Point{X: px, Y: py}, cols, rows))
+			t.ParseImage(img, acell.Point{X: px, Y: py}, cols, rows))
 	}
 
 	rebuild()

@@ -53,9 +53,21 @@ type Image struct {
 	Width, Height int
 }
 
-func ParseImage(img image.Image, pos Point, w, h int) Image {
+// ParseImage кодирует изображение в Sixel под текущий размер ячейки.
+func (t *Terminal) ParseImage(img image.Image, pos Point, w, h int) Image {
+	cellW := t.info.CellW
+	cellH := t.info.CellH
+	if cellW <= 0 {
+		cellW = 8
+	}
+	if cellH <= 0 {
+		cellH = 16
+	}
 	return Image{
-		data: encodeSixel(img, w, h, 8, 16),
+		data:   encodeSixel(img, w, h, cellW, cellH),
+		Pos:    pos,
+		Width:  w,
+		Height: h,
 	}
 }
 
@@ -87,6 +99,8 @@ type Terminal struct {
 
 	Images  []Image
 	lastImg []Image
+
+	cellSizeCh chan struct{}
 }
 
 // Default возвращает стандартные потоки ввода-вывода.
