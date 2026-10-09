@@ -109,28 +109,33 @@ var All = Info{
 
 func Default() Info {
 	return Info{
-		Name:         "xterm",
-		Colors:       Color16,
+		Name:   "xterm-256color",
+		Colors: Color256,
+
 		CursorHide:   "\033[?25l",
-		CursorShow:   "\033[?25h",
+		CursorShow:   "\033[?12l\033[?25h",
 		AltScreenOn:  "\033[?1049h",
 		AltScreenOff: "\033[?1049l",
-		Clear:        "\033[2J",
+		Clear:        "\033[2J\033[H",
 		Home:         "\033[H",
-		Sgr0:         "\033[0m",
-		Op:           "\033[39;49m",
-		Bold:         true,
-		Dim:          true,
-		Italic:       true,
-		Underline:    true,
-		Reverse:      true,
-		Blink:        true,
-		Hidden:       true,
-		Strike:       true,
-		MouseAny:     true,
-		MouseSGR:     true,
-		CellW:        8,
-		CellH:        16,
+
+		Sgr0: "\033(B\033[m",
+		Op:   "\033[39;49m",
+
+		Bold:      true,
+		Dim:       true,
+		Italic:    true,
+		Underline: true,
+		Reverse:   true,
+		Blink:     true,
+		Hidden:    true,
+		Strike:    true,
+
+		MouseAny: true,
+		MouseSGR: true,
+
+		SynchronizedUpdate: true,
+		WindowFocusEvents:  true,
 	}
 }
 
